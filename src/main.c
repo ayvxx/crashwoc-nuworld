@@ -831,6 +831,16 @@ static void nw_boot_settings(const char *data_dir, NwSettings *s, bool save)
     SDL_free(root);
 }
 
+/* settings.toml keeps the player's fog */
+static void nw_boot_store(const char *data_dir, const NwSettings *s, int fog_kept)
+{
+    NwSettings stored = *s;
+    if (fog_kept >= 0) {
+        stored.fog = fog_kept;
+    }
+    nw_boot_settings(data_dir, &stored, true);
+}
+
 /* Master and Voice are the port's buses; Music and SFX are the game's volumes, which its options menu writes too. */
 static void nw_boot_audio(void *user)
 {
@@ -1289,6 +1299,7 @@ static int nw_boot(const char *data_dir, int hardware_speed, float aspect, NwPla
     SDL_SetWindowTitle(platform.window, title);
     uint64_t presented = 0;
     NwPacer pacer = { 0 };
+    int fog_kept = -1;
     bool running = true;
     while (running) {
         nw_pacer_wait(&pacer, nw_video_fps(&settings));
@@ -1306,6 +1317,11 @@ static int nw_boot(const char *data_dir, int hardware_speed, float aspect, NwPla
             nw_discord_stop();
             nw_boot_fatal(platform.window, data_dir);
             running = false;
+        }
+        NwPresenceSnap snap;
+        nw_presence_poll(&snap);
+        if (snap.valid) {
+            nw_settings_level_fog(&settings, snap.cutmovie == 0 ? -1 : snap.level, &fog_kept);
         }
         if (!nw_settings_equal(&settings, &applied)) {
             if (settings.discord != applied.discord) {
@@ -1342,13 +1358,11 @@ static int nw_boot(const char *data_dir, int hardware_speed, float aspect, NwPla
             hitboxes_shown = hitboxes;
         }
         if (unsaved && SDL_GetTicks() - changed >= NW_SETTINGS_SAVE_MS) {
-            nw_boot_settings(data_dir, &settings, true);
+            nw_boot_store(data_dir, &settings, fog_kept);
             unsaved = false;
         }
         if (presence && SDL_GetTicks() - presented >= 1000) {
-            NwPresenceSnap snap;
             NwActivity activity;
-            nw_presence_poll(&snap);
             nw_presence_activity(&snap, nw_build_name, started / SDL_NS_PER_MS, &activity);
             nw_discord_set(&activity);
             presented = SDL_GetTicks();
@@ -1364,7 +1378,7 @@ static int nw_boot(const char *data_dir, int hardware_speed, float aspect, NwPla
     }
     nw_discord_stop();
     if (unsaved) {
-        nw_boot_settings(data_dir, &settings, true);
+        nw_boot_store(data_dir, &settings, fog_kept);
     }
     bool parked = nw_game_parked();
     NwGameState state = nw_game_state();

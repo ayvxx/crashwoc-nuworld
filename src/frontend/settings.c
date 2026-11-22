@@ -447,6 +447,18 @@ bool nw_settings_equal(const NwSettings *a, const NwSettings *b)
     return true;
 }
 
+void nw_settings_level_fog(NwSettings *s, int level, int *kept)
+{
+    bool skyless = level == NW_SETTINGS_SKYLESS_LEVEL;
+    if (skyless && *kept < 0) {
+        *kept = s->fog;
+        s->fog = 100;
+    } else if (!skyless && *kept >= 0) {
+        s->fog = *kept;
+        *kept = -1;
+    }
+}
+
 /* Returns 1, 0 when a non-TOML file was moved to .corrupt, -1 on a failure (doc is then freed). */
 static int nw_settings_doc(const char *path, NwDoc *doc)
 {
