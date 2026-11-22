@@ -19,12 +19,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/denzi-gh/crashwoc-nuworld/releases/latest"><img src="https://img.shields.io/github/v/release/denzi-gh/crashwoc-nuworld?label=release" alt="release"></a>
-  <a href="https://github.com/denzi-gh/crashwoc-nuworld/actions/workflows/build.yml"><img src="https://github.com/denzi-gh/crashwoc-nuworld/actions/workflows/build.yml/badge.svg" alt="build"></a>
-  <a href="https://decomp.dev/denzi-gh/crashwoc-decomp-ps2"><img src="https://decomp.dev/denzi-gh/crashwoc-decomp-ps2.svg?mode=shield&label=decompiled" alt="decompiled"></a>
-  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-informational" alt="platform">
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/denzi-gh/crashwoc-nuworld" alt="license"></a>
-  <a href="https://discord.gg/kmCPpW4KvJ"><img src="https://img.shields.io/badge/discord-join-5865F2?logo=discord&logoColor=white" alt="discord"></a>
+  <a href="https://github.com/denzi-gh/crashwoc-nuworld/releases"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fdenzi.dev%2Fapi%2Fdownloads%2Fdenzi-gh%2Fcrashwoc-nuworld&style=flat-square" alt="downloads"></a>
+  <a href="https://github.com/denzi-gh/crashwoc-nuworld/releases/latest"><img src="https://img.shields.io/github/v/release/denzi-gh/crashwoc-nuworld?style=flat-square&label=release" alt="release"></a>
+  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-0084ff?style=flat-square" alt="platform">
+  <a href="https://discord.gg/kmCPpW4KvJ"><img src="https://img.shields.io/badge/discord-join-5865F2?style=flat-square&logo=discord&logoColor=white" alt="discord"></a>
 </p>
 
 ---
