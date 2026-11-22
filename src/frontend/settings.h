@@ -73,6 +73,10 @@ typedef struct NwSettings {
 
 void nw_settings_defaults(NwSettings *s);
 bool nw_settings_equal(const NwSettings *a, const NwSettings *b);
+/* Smokey and the Bandicoot: its sky is black, only full fog hides it. */
+#define NW_SETTINGS_SKYLESS_LEVEL 3
+/* Entering that level sets fog to 100 and keeps the player's in *kept (-1 none); leaving puts it back. */
+void nw_settings_level_fog(NwSettings *s, int level, int *kept);
 /* "auto" (0), "W:H" or a ratio, quoted or not. */
 bool nw_settings_aspect(const char *value, float *out);
 const char *nw_settings_aspect_name(float aspect, char *buf, int size);

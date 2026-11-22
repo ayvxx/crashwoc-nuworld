@@ -324,6 +324,17 @@ int main(int argc, char *argv[])
     nw_settings_defaults(&s);
     CHECK(nw_settings_load(&s, root) && s.camera_stability == 100 && s.fog == 100 && s.blur);
     nw_settings_defaults(&s);
+    int kept = -1;
+    nw_settings_level_fog(&s, 2, &kept);
+    CHECK(s.fog == 40 && kept == -1);
+    nw_settings_level_fog(&s, NW_SETTINGS_SKYLESS_LEVEL, &kept);
+    CHECK(s.fog == 100 && kept == 40);
+    s.fog = 60;
+    nw_settings_level_fog(&s, NW_SETTINGS_SKYLESS_LEVEL, &kept);
+    CHECK(s.fog == 60 && kept == 40);
+    nw_settings_level_fog(&s, -1, &kept);
+    CHECK(s.fog == 40 && kept == -1);
+    nw_settings_defaults(&s);
     CHECK(s.movement.monkey_bar_speed == ((NwMovement)NW_MOVEMENT_NHANCED).monkey_bar_speed);
     CHECK(read_text("[game.movement]\nmonkey_bar_speed = 150\n", &s) && s.movement.monkey_bar_speed == 150);
     CHECK(read_text("[game.movement]\nmonkey_bar_speed = 900\n", &s) && s.movement.monkey_bar_speed == 500);

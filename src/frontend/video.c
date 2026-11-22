@@ -213,7 +213,7 @@ static void nw_video_panel(void *user)
     nw_debug_slider_int("Draw distance %", &s->draw_distance, 100, NW_DRAW_DISTANCE_MAX);
     nw_debug_tooltip("How far objects are drawn; 100 is the PS2's");
     nw_debug_slider_int("Fog %", &s->fog, 0, 100);
-    nw_debug_tooltip("How strong the levels' fog is");
+    nw_debug_tooltip("How strong the levels' fog is; Smokey and the Bandicoot starts at 100 and puts yours back after");
     int blur = s->blur, haze = s->haze;
     if (nw_debug_combo("Distance blur", &blur, offon, 2)) {
         s->blur = blur;
