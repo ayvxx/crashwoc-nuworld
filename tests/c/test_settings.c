@@ -126,6 +126,8 @@ static void movement_value(const char *table, const char *key, size_t offset, in
     movement_switch("spacefighter", #f, offsetof(NwSettings, movement.spacefighter.f), def);
 #define SPACE_VALUE(f, label, def, lo, hi, ...) \
     movement_value("spacefighter", #f, offsetof(NwSettings, movement.spacefighter.f), def, lo, hi);
+#define TT_SWITCH(f, label, on, ...) \
+    movement_switch("time_trial", #f, offsetof(NwSettings, movement.time_trial.f), on);
 
 static int read_speed(const char *text)
 {
@@ -418,6 +420,14 @@ int main(int argc, char *argv[])
     CHECK(read_text("[game.movement]\nmonkey_bar_speed = 100\n[game.movement.spacefighter]\nroll = false\n", &s) &&
           !s.movement.spacefighter.roll && s.movement.spacefighter.aim && !s.movement.crash.air_jump);
     CHECK(read_text("[game.movement]\nmonkey_bar_speed = 350\n", &s) && s.movement.spacefighter.aim_assist);
+    NW_TT_MOVEMENT(TT_SWITCH, TT_SWITCH, TT_SWITCH)
+    CHECK(read_text("[game.movement]\nmonkey_bar_speed = 100\n", &s) && !s.movement.time_trial.no_masks &&
+          !s.movement.time_trial.no_fruit_clock);
+    CHECK(read_text("[game.movement]\nmonkey_bar_speed = 100\n[game.movement.crash]\ngrip = true\n", &s) &&
+          s.movement.time_trial.no_masks && s.movement.time_trial.no_fruit_clock);
+    CHECK(read_text("[game.movement]\nmonkey_bar_speed = 100\n[game.movement.time_trial]\nno_masks = false\n", &s) &&
+          !s.movement.time_trial.no_masks && s.movement.time_trial.no_fruit_clock && !s.movement.crash.air_jump);
+    CHECK(read_text("[game.movement]\nmonkey_bar_speed = 350\n", &s) && s.movement.time_trial.no_masks);
 
     CHECK(read_speed("[game]\nhz = 50\npal_60hz = false\nhardware_speed = true\n") == 1);
 

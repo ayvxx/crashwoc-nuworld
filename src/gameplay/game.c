@@ -9,6 +9,7 @@
 #include "gameplay/hubgem.h"
 #include "gameplay/jeep.h"
 #include "gameplay/submarine.h"
+#include "gameplay/timetrial.h"
 #include "nups2/ps2ctl.h"
 #include "port/nameentry.h"
 #include "port/savemenu.h"
@@ -60,6 +61,19 @@ u16 SeekRot(u16 a, u16 b, s32 shift)
 s32 HitWumpa(struct obj_s *obj, s32 destroy)
 {
     return nw_sub_fruit() ? 0 : HitWumpa__retail(obj, destroy);
+}
+
+void StartTimeTrial(struct nuvec_s *pos, s32 clock)
+{
+    StartTimeTrial__retail(pos, clock);
+    nw_time_trial_started();
+}
+
+void UpdateWumpa(void)
+{
+    nw_time_trial_fruit(true);
+    UpdateWumpa__retail();
+    nw_time_trial_fruit(false);
 }
 
 /* Native name entry and save menus use retail's navigation and input guards. */

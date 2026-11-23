@@ -10,6 +10,7 @@
 #include "gameplay/mech.h"
 #include "gameplay/slidespin.h"
 #include "gameplay/submarine.h"
+#include "gameplay/timetrial.h"
 
 /* Declared by no header. */
 extern f32 in_speed;
@@ -80,4 +81,32 @@ void AddProjectile(struct nuvec_s *src, struct nuvec_s *dst, struct nuvec_s *mom
 {
     struct nuvec_s v;
     AddProjectile__retail(src, dst, nw_sub_launch(type, mom, owner, &v), type, yrot, owner);
+}
+
+/* Retail's spin (attack 2) knocks fruit away uncollected; without it the pickup reach is the plain radius. */
+s32 WumpaCollisions(struct obj_s *obj)
+{
+    struct creature_s *c = &Character[0];
+    const NwCrashMovement *m = nw_foot(c);
+    if (obj != &c->obj || !(obj->attack & 2) || !m->spin_fruit) {
+        return WumpaCollisions__retail(obj);
+    }
+    NW_FOOT_DEVIATION(m, spin_fruit);
+    float radius = obj->radius;
+    u16 attack = obj->attack;
+    if (!(attack & 0xC)) {
+        obj->radius *= obj->character == 1 && c->slide ? 3.0f : 2.0f;
+    }
+    obj->attack &= ~2;
+    s32 r = WumpaCollisions__retail(obj);
+    obj->radius = radius;
+    obj->attack = attack;
+    return r;
+}
+
+void PickupItem(struct obj_s *obj)
+{
+    if (!nw_time_trial_skip_pickup(obj)) {
+        PickupItem__retail(obj);
+    }
 }

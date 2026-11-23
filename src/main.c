@@ -1024,6 +1024,20 @@ static void nw_boot_spacefighter(void *user)
     }
 }
 
+static void nw_boot_time_trial(void *user)
+{
+    NwSettings *s = user;
+    NwTimeTrialMovement *c = &s->movement.time_trial;
+    bool on = true;
+
+    nw_boot_profile(s, 1u << NW_PART_TIME_TRIAL);
+    NW_TT_MOVEMENT(NW_BOOT_SWITCH_ITEM, NW_BOOT_FLAG_ITEM, NW_BOOT_VALUE_ITEM)
+    (void)on;
+    if (nw_run_retail()) {
+        nw_debug_text("this run plays retail: changes take effect at the next start");
+    }
+}
+
 #undef NW_BOOT_SWITCH_ITEM
 #undef NW_BOOT_FLAG_ITEM
 #undef NW_BOOT_VALUE_ITEM
@@ -1253,6 +1267,7 @@ static int nw_boot(const char *data_dir, int hardware_speed, float aspect, NwPla
     nw_debug_panel_key("N. Hanced Movement", "Firefly", SDL_SCANCODE_F9, nw_boot_firefly, &settings);
     nw_debug_panel_key("N. Hanced Movement", "Plane", SDL_SCANCODE_F8, nw_boot_plane, &settings);
     nw_debug_panel_key("N. Hanced Movement", "Space Fighter", SDL_SCANCODE_F7, nw_boot_spacefighter, &settings);
+    nw_debug_panel("N. Hanced Movement", "Time Trial", nw_boot_time_trial, &settings, false);
     {
         char *root = nw_data_root(data_dir);
         nw_profiles_start(platform.window, root, &settings.movement);
