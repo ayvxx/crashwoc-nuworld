@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(crashwoc-nuworld VERSION 0.10.0 LANGUAGES C CXX)
+project(crashwoc-nuworld VERSION 0.10.1 LANGUAGES C CXX)
 
 if(NOT CMAKE_C_COMPILER_ID MATCHES "Clang")
   message(WARNING "${PROJECT_NAME} is built and tested with Clang (clang on Linux, CLANG64 on Windows).")
