@@ -25,6 +25,7 @@ typedef enum NwMovementPart {
     NW_PART_FIREFLY,
     NW_PART_PLANE,
     NW_PART_SPACEFIGHTER,
+    NW_PART_TIME_TRIAL,
     NW_MOVEMENT_PARTS,
 } NwMovementPart;
 

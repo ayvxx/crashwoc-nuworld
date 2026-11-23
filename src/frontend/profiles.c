@@ -33,7 +33,7 @@ typedef struct NwProfileFile {
 } NwProfileFile;
 
 static const char *const nw_profiles_parts[NW_MOVEMENT_PARTS] = {
-    "Crash", "Coco", "Mech", "Submarine", "Jeep", "Atlasphere", "Firefly", "Plane", "Space Fighter",
+    "Crash", "Coco", "Mech", "Submarine", "Jeep", "Atlasphere", "Firefly", "Plane", "Space Fighter", "Time Trial",
 };
 
 static const char *const nw_profiles_kinds[] = { "Retail", "N. Hanced", "Custom" };
