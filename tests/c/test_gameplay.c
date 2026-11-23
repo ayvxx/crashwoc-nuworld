@@ -8,6 +8,7 @@
 #include "game/gametypes.h"
 #include "game/vehicle.h"
 #include "game/vehicle.h"
+#include "gamelib/terrain.h"
 #include "gameplay/air.h"
 #include "gameplay/airindicator.h"
 #include "gameplay/bosscut.h"
@@ -61,6 +62,8 @@ extern f32 in_speed;
 extern f32 in_f_friction;
 extern f32 in_s_friction;
 extern NwTerI *TerI;
+extern TerrainSetType *CurTerr;
+extern s32 clock_ok;
 extern struct rail_s Rail[];
 extern struct obj_s *pObj[64];
 extern s32 GAMEOBJECTCOUNT;
@@ -684,6 +687,71 @@ static float finish_top_at(const NwProfile *p, short character, short vehicle)
     c->obj.top = 0.45f;
     CHECK(nw_fix_finish_top(&c->obj) == 0.45f);
     return c->obj.top;
+}
+
+static void space_stations(void)
+{
+    static TerrainSetType set;
+    static TerrainSituType situs[0x800];
+    static const struct nuvec_s at[] = { { -14.860422f, 7.1e-15f, 28.568737f }, { 32.109058f, 0.0f, -0.205634f },
+                                         { 0.0f, -42.916565f, 0.0f }, { 5.0f, 0.0f, 5.0f } };
+    TerrainSetType *was_terr = CurTerr;
+    s32 was_level = Level;
+    for (int i = 0; i < 0x800; i++) {
+        situs[i].type = -1;
+    }
+    for (int i = 0; i < 4; i++) {
+        situs[i].type = 0;
+        situs[i].Location = at[i];
+    }
+    situs[4].type = 1;
+    situs[4].Location = at[0];
+    set.terr = situs;
+    CurTerr = &set;
+    Level = 0x1A;
+    nw_profile_apply(&(NwProfile){ 0 });
+    nw_fix_space_stations_before();
+    CHECK(situs[0].type == 0 && situs[1].type == 0);
+    nw_fix_space_stations_after();
+    nw_profile_apply(&(NwProfile){ .bug_fixes = true });
+    nw_fix_space_stations_before();
+    CHECK(situs[0].type == -1 && situs[1].type == -1);
+    CHECK(situs[2].type == 0 && situs[3].type == 0 && situs[4].type == 1);
+    nw_fix_space_stations_after();
+    CHECK(situs[0].type == 0 && situs[1].type == 0 && situs[2].type == 0 && situs[4].type == 1);
+    Level = 0x12;
+    nw_fix_space_stations_before();
+    CHECK(situs[0].type == 0 && situs[1].type == 0);
+    nw_fix_space_stations_after();
+    nw_profile_apply(&(NwProfile){ 0 });
+    CurTerr = was_terr;
+    Level = was_level;
+}
+
+static bool space_clock_left(const NwProfile *p, bool progress)
+{
+    struct creature_s *clock = &Character[1];
+    nw_profile_apply(p);
+    clock->on = 1;
+    clock->off_wait = 0;
+    clock->obj.character = 0x76;
+    clock->obj.parent = clock;
+    clock->obj.dead = 0;
+    clock_ok = 1;
+    nw_fix_space_clock(progress);
+    return clock->on && clock_ok;
+}
+
+static void space_clock(void)
+{
+    struct creature_s was = Character[1];
+    s32 was_ok = clock_ok;
+    NwProfile retail = { 0 }, fixed = { .bug_fixes = true };
+    CHECK(space_clock_left(&retail, true) && space_clock_left(&fixed, false));
+    CHECK(!space_clock_left(&fixed, true) && Character[1].off_wait == 2 && clock_ok == 0);
+    nw_profile_apply(&retail);
+    Character[1] = was;
+    clock_ok = was_ok;
 }
 
 static void finish_top(void)
@@ -3532,6 +3600,8 @@ int main(void)
     air_jump();
     ground_slam();
     finish_top();
+    space_stations();
+    space_clock();
     coco_jump();
     coco_run();
     mech_stand_jump();

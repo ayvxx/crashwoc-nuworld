@@ -343,7 +343,8 @@ static const NwSettingKey nw_settings_keys[] = {
       .help = "true: a vehicle's buttons in a corner the first time a save rides it" },
     { .table = "game", .name = "bug_fixes", .kind = NW_SETTING_BOOL, NW_FIELD(bug_fixes),
       .help = "true: fixes PS2 bugs: a body slam starting on the ground, an exit portal missed in a slide, the Firefly's "
-              "goggles left behind in the victory dance, blurred character shadows" },
+              "goggles left behind in the victory dance, blurred character shadows, invisible spots in Crashteroids "
+              "that blow up Coco's ship, Crashteroids' time trial clock still there after stations are hit" },
     { .table = "game", .sub = "movement", .name = "monkey_bar_speed", .kind = NW_SETTING_INT,
       NW_FIELD(movement.monkey_bar_speed), .lo = 100, .hi = 500,
       .help = "100-500, Crash's monkey bar speed, % of PS2; N. Hanced: 335" },

@@ -21,7 +21,7 @@
     SW(grip, "Grip", true, "less sliding on stops and turns, except on ice") \
     VAL(grip_turn, "Turn grip %", 175, 100, 500, "% of PS2") \
     VAL(grip_brake, "Braking %", 180, 100, 400, "% of PS2") \
-    SW(long_spin, "Longer spin", true, "longer spin attack") \
+    SW(long_spin, "Longer spin", false, "longer spin attack") \
     VAL(spin_ms, "Spin length ms", 400, 320, 600, "PS2: 320") \
     SW(spin_fruit, "Spin collects fruit", true, "a spin collects wumpa fruit instead of knocking it away") \
     SW(slide, "Crash slide", true, "faster slide when out of running") \
