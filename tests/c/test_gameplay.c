@@ -79,6 +79,7 @@ extern s32 TimeTrial;
 extern struct wumpa_s Wumpa[320];
 extern struct gdeb_s GDeb[];
 s32 HitWumpa(struct obj_s *obj, s32 destroy);
+s32 WumpaCollisions(struct obj_s *obj);
 void MoveLoopXZ(struct obj_s *obj, u16 *hdg);
 u16 SeekRot(u16 a, u16 b, s32 shift);
 u16 SeekRot__retail(u16 a, u16 b, s32 shift);
@@ -852,8 +853,8 @@ static void grip(void)
     crash_at(50, &on);
     Character[0].obj.ground = 1;
     CHECK(near(loop_side(0.05f), 0.05f - 1.75f * step, 1e-5f));
-    CHECK(near(loop_forward(0.05f, 0.0f), 0.05f - step, 1e-5f));
-    CHECK(near(loop_forward(-0.05f, 0.072f), -0.05f + step, 1e-5f));
+    CHECK(near(loop_forward(0.05f, 0.0f), 0.05f - 1.8f * step, 1e-5f));
+    CHECK(near(loop_forward(-0.05f, 0.072f), -0.05f + 1.8f * step, 1e-5f));
     CHECK(near(loop_forward(0.0f, 0.072f), step, 1e-5f));
     Character[0].obj.surface_type = 1;
     CHECK(near(loop_side(0.05f), 0.05f - step, 1e-5f));
@@ -1406,6 +1407,34 @@ static void hazard_hitboxes(void)
     nw_hazards_restore();
     pObj[0] = pObj[1] = NULL;
     GAMEOBJECTCOUNT = 0;
+}
+
+static void spin_fruit(void)
+{
+    NwProfile retail = { 0 }, on = ONLY(spin_fruit), coco = COCO_ONLY(spin_fruit);
+    struct obj_s *obj = &Character[0].obj;
+    struct wumpa_s fruit = Wumpa[0];
+    const struct { void (*at)(int, const NwProfile *); const NwProfile *p; s32 slide; float dx; u8 active; } runs[] = {
+        { crash_at, &on, 0, 0.6f, 0 },    { crash_at, &on, 0, 0.8f, 2 }, { crash_at, &retail, 0, 0.6f, 3 },
+        { coco_at, &on, 0, 0.6f, 3 },     { coco_at, &coco, 0, 0.6f, 0 }, { coco_at, &coco, 1, 0.9f, 0 },
+        { crash_at, &on, 1, 0.9f, 2 },
+    };
+    TimeTrial = 0;
+    for (size_t i = 0; i < sizeof(runs) / sizeof(runs[0]); i++) {
+        runs[i].at(50, runs[i].p);
+        Character[0].slide = (short)runs[i].slide;
+        obj->parent = &Character[0];
+        obj->radius = 0.25f;
+        obj->SCALE = 1.0f;
+        obj->bot = -1.0f;
+        obj->top = 1.0f;
+        obj->attack = 2;
+        Wumpa[0].pos = (struct nuvec_s){ runs[i].dx, 0.0f, 0.0f };
+        Wumpa[0].active = 2;
+        WumpaCollisions(obj);
+        CHECK(Wumpa[0].active == runs[i].active && obj->attack == 2 && obj->radius == 0.25f);
+    }
+    Wumpa[0] = fruit;
 }
 
 static void mech_at(int hz, const NwProfile *p)
@@ -3453,6 +3482,7 @@ int main(void)
     edge_grip();
     line_2d();
     hazard_hitboxes();
+    spin_fruit();
     air_jump();
     ground_slam();
     finish_top();

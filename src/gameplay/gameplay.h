@@ -20,16 +20,17 @@
     VAL(run_accel, "Acceleration %", 150, 100, 300, "% of PS2") \
     SW(grip, "Grip", true, "less sliding on stops and turns, except on ice") \
     VAL(grip_turn, "Turn grip %", 175, 100, 500, "% of PS2") \
-    VAL(grip_brake, "Braking %", 100, 100, 400, "% of PS2") \
+    VAL(grip_brake, "Braking %", 180, 100, 400, "% of PS2") \
     SW(long_spin, "Longer spin", true, "longer spin attack") \
     VAL(spin_ms, "Spin length ms", 400, 320, 600, "PS2: 320") \
+    SW(spin_fruit, "Spin collects fruit", true, "a spin collects wumpa fruit instead of knocking it away") \
     SW(slide, "Crash slide", true, "faster slide when out of running") \
     VAL(slide_speed, "Slide speed %", 150, 100, 300, "% of PS2") \
     VAL(slide_ms, "Slide length ms", 350, 300, 600, "PS2: 467") \
     FLAG(slide_keep, "Keep speed after it", false, "slide speed carries on instead of stopping") \
     FLAG(slide_cancel, "Let go to stand up", false, "releasing crouch ends the slide") \
     VAL(slide_min_ms, "Shortest slide ms", 300, 0, 400, "minimum length when crouch is released") \
-    VAL(slide_jump, "Slide jump speed kept %", 0, 0, 100, "share of slide speed kept when jumping out of it") \
+    VAL(slide_jump, "Slide jump speed kept %", 50, 0, 100, "share of slide speed kept when jumping out of it") \
     VAL(slide_steer, "Slide steering deg/s", 210, 0, 720, "turn speed toward the stick while sliding; PS2: 0") \
     SW(slide_spin, "Crash slide spin", true, "a spin out of a slide keeps its speed and leans forward") \
     VAL(slide_spin_kept, "Spin speed %", 110, 50, 150, "% of the slide's speed, held while the spin lasts") \
@@ -72,7 +73,8 @@ typedef struct NwCrashMovement {
     VAL(run_accel, "Acceleration %", 150, 100, 300, "% of PS2") \
     SW(grip, "Grip", true, "less sliding on stops and turns, except on ice") \
     VAL(grip_turn, "Turn grip %", 300, 100, 500, "% of PS2") \
-    VAL(grip_brake, "Braking %", 200, 100, 400, "% of PS2")
+    VAL(grip_brake, "Braking %", 200, 100, 400, "% of PS2") \
+    SW(spin_fruit, "Spin collects fruit", true, "a spin collects wumpa fruit instead of knocking it away")
 
 typedef struct NwCocoMovement {
     NW_COCO_MOVEMENT(NW_CRASH_BOOL, NW_CRASH_BOOL, NW_CRASH_INT)
