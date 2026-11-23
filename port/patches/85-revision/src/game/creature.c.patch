@@ -103,7 +103,7 @@
              }
              plr_rebound = 0;
              ATLASCAMHEIGHT = 2.5f;
-@@ -1992,6 +2032,9 @@ void ManageCreatures(void)
+@@ -1994,6 +2034,9 @@ void ManageCreatures(void)
  
      p0 = &player->obj.pos;
      index = -1;
@@ -113,7 +113,7 @@
      if (Character[c_slot].used != 0) {
          index = Character[c_slot].i_aitab;
          if (index != -1) {
-@@ -2123,6 +2166,10 @@ void ManageCreatures(void)
+@@ -2125,6 +2168,10 @@ void ManageCreatures(void)
          types = (u8 *)AIType;
          size = sizeof(struct aitype_s);
          if (!(AITab[index].delay > 0.0f) || !(AITab[index].time > 0.0f)) {
@@ -124,17 +124,17 @@
              if (Character[c_slot].used != 0) {
                  Character[c_slot].on = 0;
                  Character[c_slot].off_wait = 2;
-@@ -2131,7 +2178,8 @@ void ManageCreatures(void)
-                 }
+@@ -2134,7 +2181,8 @@ void ManageCreatures(void)
              } else if (NuVecDistSqr(&AITab[index].origin,
-                                     &player->obj.pos, 0) < range2) {
+                                     &player->obj.pos, 0) <
+                        NW_WIDE(range2, AIType[ai->ai_type].character == 0x76 ? nw_wide_ai_range2() : range2)) {
 -                i = ((struct aitype_s *)(types + ai->ai_type * size))->character;
 +                i = NW_REV(((struct aitype_s *)(types + ai->ai_type * size))->character,
 +                           AIType[AITab[index].ai_type].character);
                  NuDebugMsgProlog(".\\creature.c", 0x135C)(
                      "ManageCreatures - new character = %s", CData[i].name);
                  AddCreature(i, c_slot, index);
-@@ -2189,7 +2237,7 @@ void LoadCharacterModels(void)
+@@ -2192,7 +2240,7 @@ void LoadCharacterModels(void)
          CRemap[i] = -1;
          CLetter[i] = 0x3F;
      }
@@ -143,7 +143,7 @@
          CModel[i].obj = 0;
      }
  
-@@ -2220,7 +2268,7 @@ void LoadCharacterModels(void)
+@@ -2223,7 +2271,7 @@ void LoadCharacterModels(void)
          } else {
              character = LDATA->clist[i];
          }
@@ -152,7 +152,7 @@
              sprintf(tbuf, "loading %s", CData[character].name);
              LoadScreen(tbuf);
              memset(model, 0, sizeof(struct CharacterModel));
-@@ -2304,7 +2352,7 @@ void LoadCharacterModels(void)
+@@ -2307,7 +2355,7 @@ void LoadCharacterModels(void)
                              NuStrCat(tbuf, ".bsa");
                              model->fanmdata[anim->action] = InstAnimDataLoad(tbuf);
                              if (model->fanmdata[anim->action] != 0) {
@@ -161,7 +161,7 @@
                              }
                          }
                      }
-@@ -2371,6 +2419,9 @@ void ChangeCharacter(struct creature_s *c, s32 character)
+@@ -2374,6 +2422,9 @@ void ChangeCharacter(struct creature_s *c, s32 character)
              c->slam = 0;
              c->spin = 0;
              c->crawl = 0;
@@ -171,7 +171,7 @@
              c->tiptoe = 0;
              c->sprint = 0;
              c->somersault = 0;
-@@ -2897,6 +2948,7 @@ void MovePlayer(struct creature_s *c, struct nupad_s *pad)
+@@ -2900,6 +2951,7 @@ void MovePlayer(struct creature_s *c, struct nupad_s *pad)
      s32 i;
      s32 gfx;
      s32 jrate;
@@ -179,7 +179,7 @@
      f32 spd;
      s32 sfx;
      f32 f;
-@@ -2906,6 +2958,9 @@ void MovePlayer(struct creature_s *c, struct nupad_s *pad)
+@@ -2909,6 +2961,9 @@ void MovePlayer(struct creature_s *c, struct nupad_s *pad)
      f32 dy;
      f32 dz;
  
@@ -189,7 +189,7 @@
      UpdateRumble(&c->rumble);
      if (pad != 0) {
          if (Game.vibration != 0 && Demo == 0) {
-@@ -2917,6 +2972,13 @@ void MovePlayer(struct creature_s *c, struct nupad_s *pad)
+@@ -2920,6 +2975,13 @@ void MovePlayer(struct creature_s *c, struct nupad_s *pad)
              NuPs2PadSetMotors(pad, 0, 0);
          }
      }
@@ -203,7 +203,7 @@
      i = VEHICLECONTROL;
      if (c->obj.vehicle != -1) {
          if ((LBIT & 0x1105252801ULL) != 0 || Level == 3 || Level == 0x1D ||
-@@ -2967,7 +3029,7 @@ void MovePlayer(struct creature_s *c, struct nupad_s *pad)
+@@ -2970,7 +3032,7 @@ void MovePlayer(struct creature_s *c, struct nupad_s *pad)
          plr_vehicle_time = 0.0f;
          if (veh == 0x89) {
              VEHICLETIME = 60.0f;
@@ -212,7 +212,7 @@
              ResetJeep(c);
          }
          ResetTubs();
-@@ -3191,20 +3253,29 @@ void MovePlayer(struct creature_s *c, struct nupad_s *pad)
+@@ -3194,20 +3256,29 @@ void MovePlayer(struct creature_s *c, struct nupad_s *pad)
                  fz = -((f32)pad->rdata.l_alg_y - 127.5f);
                  f = (f32)pad->rdata.l_alg_x - 127.5f;
                  if (f * f + fz * fz < 1806.25f) {
@@ -256,7 +256,7 @@
                      }
                  }
                  if (f != 0.0f || fz != 0.0f) {
-@@ -3217,7 +3288,9 @@ void MovePlayer(struct creature_s *c, struct nupad_s *pad)
+@@ -3220,7 +3291,9 @@ void MovePlayer(struct creature_s *c, struct nupad_s *pad)
              dang = NuAtan2D(in.x, in.z);
              in2.x = 0.0f;
              in2.y = 0.0f;
@@ -267,7 +267,7 @@
                  double ax;
                  double az;
                  double am;
-@@ -3703,15 +3776,23 @@ void MovePlayer(struct creature_s *c, struct nupad_s *pad)
+@@ -3706,15 +3779,23 @@ void MovePlayer(struct creature_s *c, struct nupad_s *pad)
                  in_s_friction = 0.001440000138245523f;
                  NuVecRotateX(&in2, &v001, -c->obj.xrot);
                  if (c->obj.pad_speed > 0.0f) {
@@ -299,7 +299,7 @@
                      }
                      if (c->obj.pad_angle > 0x8000) {
                          in2.z = -in2.z;
-@@ -3765,15 +3846,23 @@ void MovePlayer(struct creature_s *c, struct nupad_s *pad)
+@@ -3768,15 +3849,23 @@ void MovePlayer(struct creature_s *c, struct nupad_s *pad)
                      in2.z *= minfo->RUNSPEED;
                      in2.y *= minfo->RUNSPEED;
                  } else if (c->obj.pad_speed > 0.0f) {
@@ -331,7 +331,7 @@
                      }
                      in2.y *= c->obj.pad_speed;
                  } else {
-@@ -3886,7 +3975,6 @@ void MovePlayer(struct creature_s *c, struct nupad_s *pad)
+@@ -3889,7 +3978,6 @@ void MovePlayer(struct creature_s *c, struct nupad_s *pad)
              tbslotEndFn(app_tbset, 7);
          }
          {
@@ -339,7 +339,7 @@
              i = PlatformCrush();
              if (i != 0) {
                  switch (i) {
-@@ -4140,7 +4228,8 @@ skip_surface:
+@@ -4143,7 +4231,8 @@ skip_surface:
          }
          if ((c->obj.ground & 2) != 0 && c->obj.dead == 0) {
              if ((TerSurface[c->obj.surface_type].flags & 1) != 0 &&
@@ -349,7 +349,7 @@
                  if (VEHICLECONTROL == 1 && c->obj.vehicle != -1) {
                      i = 0xB;
                  } else {
-@@ -4156,6 +4245,10 @@ skip_surface:
+@@ -4159,6 +4248,10 @@ skip_surface:
                          i = 5;
                      }
                  }
@@ -360,7 +360,7 @@
                  if (c->obj.layer_type != -1 && c->obj.submerged == 0 &&
                      Level == 2 && Bonus == 0) {
                      if (c->obj.mask != 0 && c->obj.mask->active != 0 &&
-@@ -4176,6 +4269,11 @@ skip_surface:
+@@ -4179,6 +4272,11 @@ skip_surface:
                          c->obj.mask->active = 0;
                      }
                  }
@@ -372,7 +372,7 @@
              } else if ((TerSurface[c->obj.surface_type].flags & 2) != 0) {
                  c->obj.boing |= 2;
                  GameSfx(2, &c->obj.pos);
-@@ -4320,9 +4418,12 @@ post_move:
+@@ -4323,9 +4421,12 @@ post_move:
          }
      }
      c->obj.frame++;
@@ -388,7 +388,7 @@
              if (pad != 0 && (pad->paddata_db & 0x40) != 0) {
                  loadsave_frame = 0x32;
              } else {
-@@ -4438,7 +4539,7 @@ void ProcessCreatures(void)
+@@ -4441,7 +4542,7 @@ void ProcessCreatures(void)
          c->obj.RADIUS *= c->obj.SCALE;
          /* PS2-only: on level 0x11 a time trial can be restarted with the
           * R1-family button (Pad[0]->buttons & 0x100). Not present on GC. */
@@ -397,7 +397,7 @@
              if ((TimeTrial != 0) && (c->obj.dead == 0) && (Pad[0] != 0) &&
                  ((Pad[0]->paddata_db & 0x100) != 0)) {
                  c->obj.pos = (struct nuvec_s){ -53.01f, 0.0f, -3.36f };
-@@ -4612,8 +4713,13 @@ s32 DrawCharacterModel(struct CharacterModel *model, AnimPacket *anim,
+@@ -4615,8 +4716,13 @@ s32 DrawCharacterModel(struct CharacterModel *model, AnimPacket *anim,
          joint->flags = 1;
      }
  
@@ -412,7 +412,7 @@
          goto Exit;
      }
  
-@@ -4706,6 +4812,9 @@ s32 DrawCharacterModel(struct CharacterModel *model, AnimPacket *anim,
+@@ -4709,6 +4815,9 @@ s32 DrawCharacterModel(struct CharacterModel *model, AnimPacket *anim,
      NoModelAnim:
          NuHGobjEval(model2->obj, nJ, pJ, tmtx);
          action = -1;
@@ -422,7 +422,7 @@
      }
  
      if (glass_draw == 0) {
-@@ -4733,6 +4842,8 @@ s32 DrawCharacterModel(struct CharacterModel *model, AnimPacket *anim,
+@@ -4736,6 +4845,8 @@ s32 DrawCharacterModel(struct CharacterModel *model, AnimPacket *anim,
              scale = CData[model->character].shadow_scale;
              if (model->character == 0x99) {
                  ShadRndr(mS, model->shaddata[98], 1.0f, scale);
@@ -431,7 +431,7 @@
              } else if ((anim->blend != 0)
                         && ((u16)anim->blend_dst_action < 0x76)
                         && (model->anmdata[anim->blend_dst_action] != 0)) {
-@@ -4900,9 +5011,15 @@ void DrawCreatures(struct creature_s *c, s32 count, s32 render, s32 shadow)
+@@ -4903,9 +5014,15 @@ void DrawCreatures(struct creature_s *c, s32 count, s32 render, s32 shadow)
              }
          }
  
@@ -448,7 +448,7 @@
              if ((LDATA->flags & 0x200) == 0) {
                  if (NW_WIDE_SCALE(r2, nw_wide.draw2) < dist) {
                      goto next;
-@@ -5549,6 +5666,9 @@ void ResetPlayerMoves(struct creature_s *c)
+@@ -5552,6 +5669,9 @@ void ResetPlayerMoves(struct creature_s *c)
      c->slam = 0;
      c->spin = 0;
      c->crawl = 0;
@@ -458,7 +458,7 @@
      c->tiptoe = 0;
      c->sprint = 0;
      c->somersault = 0;
-@@ -5603,7 +5723,7 @@ void CloseCreatures(void)
+@@ -5606,7 +5726,7 @@ void CloseCreatures(void)
              Character[i].used = 0;
          }
      }

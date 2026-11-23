@@ -7,6 +7,7 @@
 #include <SDL3/SDL.h>
 
 #include "nu_port.h"
+#include "game/gametypes.h"
 #include "gamelib/terrain.h"
 #include "gfx/rndr.h"
 #include "nu3d/nucamera.h"
@@ -24,6 +25,9 @@ extern struct nucamera_s *pNuCam;
 extern float PANEL3DMULX;
 extern volatile s32 bgload_complete;
 extern char vu_load_glass_mpg[], vu_load_water_mpg[], vu_load_wateruv_mpg[];
+extern s32 Level;
+extern struct ldata_s *LDATA;
+extern f32 AIVISRANGE;
 
 struct nw_wide_s nw_wide = {
     .k = 1.0f, .aspect = 0.75f, .width = 640, .hud = 1.0f, .draw = 1.0f, .draw2 = 1.0f, .distance = 1.0f
@@ -117,6 +121,13 @@ void nw_wide_request(float aspect, float hud)
 void nw_wide_draw_distance(int percent)
 {
     SDL_SetAtomicInt(&nw_wide_distance_asked, percent);
+}
+
+float nw_wide_ai_range2(void)
+{
+    float clip = LDATA->farclip;
+    float d = Level == 0x25 || (LDATA->flags & 0x202) || clip < AIVISRANGE ? clip : AIVISRANGE;
+    return d * d;
 }
 
 /* Recomputes what the game derived from the old width: SWIDTH, MAXVPSIZEX, aspect, MaxVP, targets, VU words. */

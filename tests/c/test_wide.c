@@ -2,6 +2,7 @@
 #include <stdio.h>
 
 #include "nu_port.h"
+#include "game/gametypes.h"
 #include "nu3d/nuvport.h"
 #include "numath/numtx.h"
 #include "port/wide.h"
@@ -11,6 +12,9 @@ extern float PANEL3DMULX;
 extern int PS2_VCNTR_X, PS2_REZ_W;
 extern int SWIDTH, MAXVPSIZEX, MAXVPSIZEY;
 extern volatile int bgload_complete;
+extern struct ldata_s *LDATA;
+extern int Level;
+extern float AIVISRANGE;
 
 static int failures;
 
@@ -113,6 +117,24 @@ int main(void)
     CHECK(fabsf(nw_wide.draw - 1.08f) < 0.01f && nw_wide.distance == 1.0f);
     nw_wide_set(4.0f / 3.0f, 16.0f / 9.0f);
     CHECK(nw_wide.draw == 1.0f && nw_wide.draw2 == 1.0f && nw_wide.distance == 1.0f);
+
+
+    struct ldata_s ldata = { .farclip = 91 };
+    LDATA = &ldata;
+    Level = 10;
+    nw_wide_draw_distance(400);
+    nw_wide_poll();
+    CHECK(AIVISRANGE == 25.0f && nw_wide_ai_range2() == 625.0f);
+    ldata.farclip = 20;
+    CHECK(nw_wide_ai_range2() == 400.0f);
+    ldata.farclip = 200;
+    ldata.flags = 0x200;
+    CHECK(nw_wide_ai_range2() == 40000.0f);
+    ldata.flags = 0;
+    Level = 0x25;
+    CHECK(nw_wide_ai_range2() == 40000.0f);
+    nw_wide_draw_distance(100);
+    nw_wide_poll();
 
     if (failures) {
         fprintf(stderr, "wide: %d checks failed\n", failures);

@@ -1,0 +1,13 @@
+--- a/src/game/ai.c
++++ b/src/game/ai.c
+@@ -5490,6 +5490,10 @@ rotdone:
+     c->obj.frame++;
+     switch (c->obj.character) {
+     case 0xB1:
++        /* the warp pad hums only where retail would have spawned it */
++        if (NW_WIDE(0, NuVecDistSqr(&AITab[c->i_aitab].origin, &player->obj.pos, 0) > nw_wide_ai_range2())) {
++            break;
++        }
+         gamesfx_pitch = 0x75A;
+         gamesfx_effect_volume = 0x3FFF;
+         GameSfxLoop(0x61, &c->obj.pos);

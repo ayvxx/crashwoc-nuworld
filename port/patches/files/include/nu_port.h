@@ -164,6 +164,7 @@ int nw_wide_seen(int drawn);
 void nw_wide_vp(int paused);
 int nw_wide_vp_x(void); /* 1/16 pixels */
 void nw_wide_hud(struct numtx_s *m);
+float nw_wide_ai_range2(void); /* ManageCreatures spawn radius squared at retails draw distance */
 #define NW_WIDE(ps2, host) (host)
 #define NW_WIDE_SCALE(x, f) ((x) * (f))
 #define NW_WIDE_ONLY(stmt) stmt
