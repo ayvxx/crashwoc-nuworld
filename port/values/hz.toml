@@ -242,6 +242,8 @@ sites = [
 path = "src/game/deb3.c"
 sites = [
   { fn = "PlayRandSFX", pal = "50", nth = 0, of = 1, ntsc = "60" },
+  { fn = "JonMaskFPS", pal = "0x320000", nth = 0, of = 2, ntsc = "0x3C0000" },
+  { fn = "JonMaskFPS", pal = "0x320000", nth = 1, of = 2, ntsc = "0x3C0000" },
   { fn = "InitDeb3", pal = "50", nth = 0, of = 3, ntsc = "60" },
   { fn = "InitDeb3", pal = "50", nth = 1, of = 3, ntsc = "60" },
   { fn = "InitDeb3", pal = "50", nth = 2, of = 3, ntsc = "60" },
