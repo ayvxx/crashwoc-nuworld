@@ -1,14 +1,27 @@
 #include "gameplay/fixes.h"
 
+#include <math.h>
 #include <stdbool.h>
 #include <string.h>
 
+#include <SDL3/SDL.h>
+
 #include "game/creature.h"
+#include "gamelib/terrain.h"
 #include "gameplay/crash.h"
 #include "gameplay/gameplay.h"
 #include "nu3d/nuanim.h"
 #include "nu3d/nuhgobj.h"
 #include "numath/numtx.h"
+
+extern TerrainSetType *CurTerr;
+extern s32 Level;
+extern s32 clock_ok;
+struct creature_s *FindClock(void);
+void ClockOff(void);
+
+#define NW_FIX_SPACE_LEVEL 0x1A
+#define NW_FIX_SITUS 0x800
 
 void NuHGobjEval(struct NUHGOBJ_s *hobj, int njanims, struct NUJOINTANIM_s *janim, struct numtx_s *mtx_array);
 void NuHGobjEvalAnim(struct NUHGOBJ_s *hobj, struct nuanimdata_s *animdata, float time, int njanims,
@@ -110,4 +123,56 @@ void nw_fix_goggles_place(struct NUHGOBJ_s *hobj, struct numtx_s *mtx_array)
     if (hobj && hobj == nw_fix_goggles.hobj) {
         mtx_array[nw_fix_goggles.joint] = nw_fix_goggles.mtx;
     }
+}
+
+static const struct nuvec_s nw_fix_space_old[] = {
+    { -14.860422f, 0.0f, 28.568737f },
+    { -15.846087f, 0.0f, -26.554375f },
+    { 32.109058f, 0.0f, -0.205634f },
+};
+static TerrainSituType *nw_fix_space_hidden[16];
+static int nw_fix_space_nhidden;
+
+static bool nw_fix_space_old_station(const struct nuvec_s *at)
+{
+    for (size_t i = 0; i < SDL_arraysize(nw_fix_space_old); i++) {
+        const struct nuvec_s *s = &nw_fix_space_old[i];
+        if (fabsf(at->x - s->x) < 0.01f && fabsf(at->y - s->y) < 0.01f && fabsf(at->z - s->z) < 0.01f) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void nw_fix_space_stations_before(void)
+{
+    nw_fix_space_nhidden = 0;
+    if (!nw_profile.bug_fixes || Level != NW_FIX_SPACE_LEVEL || !CurTerr) {
+        return;
+    }
+    for (int i = 0; i < NW_FIX_SITUS && nw_fix_space_nhidden < (int)SDL_arraysize(nw_fix_space_hidden); i++) {
+        TerrainSituType *t = &CurTerr->terr[i];
+        if (t->type == 0 && nw_fix_space_old_station(&t->Location)) {
+            NW_DEVIATION(bug_fixes);
+            t->type = -1;
+            nw_fix_space_hidden[nw_fix_space_nhidden++] = t;
+        }
+    }
+}
+
+void nw_fix_space_stations_after(void)
+{
+    for (int i = 0; i < nw_fix_space_nhidden; i++) {
+        nw_fix_space_hidden[i]->type = 0;
+    }
+    nw_fix_space_nhidden = 0;
+}
+
+void nw_fix_space_clock(bool progress)
+{
+    if (!progress || !nw_profile.bug_fixes || (!clock_ok && !FindClock())) {
+        return;
+    }
+    NW_DEVIATION(bug_fixes);
+    ClockOff();
 }

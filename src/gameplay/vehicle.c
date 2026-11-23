@@ -27,6 +27,26 @@ void DrawGlider(struct creature_s *c)
     nw_fix_goggles_after();
 }
 
+void MoveGlider(struct creature_s *Cre, struct nupad_s *Pad)
+{
+    nw_fix_space_stations_before();
+    MoveGlider__retail(Cre, Pad);
+    nw_fix_space_stations_after();
+}
+
+void ProcessSatellite(struct satellite_s *sat)
+{
+    ProcessSatellite__retail(sat);
+    nw_fix_space_clock(!sat->active);
+}
+
+void ProcessSpaceStation(struct spacestation_s *station)
+{
+    s32 hitpoints = station->hitpoints;
+    ProcessSpaceStation__retail(station);
+    nw_fix_space_clock(station->hitpoints < hitpoints || !station->active);
+}
+
 void ControlGlider(struct GLIDERSTRUCT *glider, struct nupad_s *pad)
 {
     if (!nw_firefly_control(glider, pad) && !nw_plane_control(glider, pad) && !nw_space_control(glider, pad)) {

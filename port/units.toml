@@ -146,7 +146,8 @@ schema = 1
     "UpdateProjectiles", "AddProjectile", "WumpaCollisions", "PickupItem"] }
 "game/visi" = { treatment = "compile" }
 "game/vehicle" = { treatment = "compile", wrap = ["BossBar", "ProcessMovementAtlas", "ControlGlider", "DrawGlider",
-    "ProcessGliderMovement", "GliderFire", "DrawTorpedoTarget", "CollideGliderBullets"] }
+    "ProcessGliderMovement", "GliderFire", "DrawTorpedoTarget", "CollideGliderBullets", "MoveGlider", "ProcessSatellite",
+    "ProcessSpaceStation"] }
 "game/vehsupp" = { treatment = "compile" }
 "game/vehterr" = { treatment = "compile" }
 "game/jeep" = { treatment = "compile" }
