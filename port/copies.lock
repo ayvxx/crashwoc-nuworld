@@ -141,6 +141,7 @@ schema = 1
 "src/game/deb3.c:AddDeb3Ang" = "a724b15edbe740ae"
 "src/game/deb3.c:InitDeb3" = "bcdc168e1e6734ae"
 "src/game/deb3.c:JonExtraDraw" = "b3eaa35414f5ebe5"
+"src/game/deb3.c:JonMaskFPS" = "f6f04aa2ffbc6a37"
 "src/game/deb3.c:LaunchObjects" = "2e84a20070594421"
 "src/game/deb3.c:PlayRandSFX" = "07f4698838978b07"
 "src/game/deb3.c:ProcDeb3" = "8dc4efef8d3946b7"
