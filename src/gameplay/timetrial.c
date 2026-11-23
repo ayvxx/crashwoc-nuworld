@@ -1,3 +1,4 @@
+#include <stddef.h>
 #include "gameplay/timetrial.h"
 
 #include "game/creature.h"
@@ -15,7 +16,6 @@ static bool nw_time_trial_flying;
 void nw_time_trial_started(void)
 {
     MaskInfo *mask = player ? player->obj.mask : NULL;
-    /* Retail's own test: in levels with these flags masks neither protect nor show. */
     if (!nw_profile.movement.time_trial.no_masks || !mask || !mask->active || (LDATA->flags & 0xE00)) {
         return;
     }
