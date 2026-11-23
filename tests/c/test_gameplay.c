@@ -27,6 +27,7 @@
 #include "gameplay/slidespin.h"
 #include "gameplay/steadycam.h"
 #include "gameplay/submarine.h"
+#include "gameplay/timetrial.h"
 #include "gameplay/vehiclehints.h"
 #include "nu3d/nugscn.h"
 #include "nu_port.h"
@@ -333,6 +334,7 @@ static NwProfile neutral_arc(NwProfile p)
 #define FIREFLY_ONLY(f) only(offsetof(NwMovement, firefly.f))
 #define PLANE_ONLY(f) only(offsetof(NwMovement, plane.f))
 #define SPACE_ONLY(f) only(offsetof(NwMovement, spacefighter.f))
+#define TT_ONLY(f) only(offsetof(NwMovement, time_trial.f))
 
 static void crash_at(int hz, const NwProfile *p)
 {
@@ -1435,6 +1437,49 @@ static void spin_fruit(void)
         CHECK(Wumpa[0].active == runs[i].active && obj->attack == 2 && obj->radius == 0.25f);
     }
     Wumpa[0] = fruit;
+}
+
+static void time_trial(void)
+{
+    static struct ldata_s level;
+    static MaskInfo mask;
+    struct ldata_s *was = LDATA;
+    struct creature_s *who = player;
+    struct obj_s clock = { .character = 0x76 }, crate = { .character = 0x75 };
+    NwProfile retail = { 0 }, masks = TT_ONLY(no_masks), shots = TT_ONLY(no_fruit_clock);
+
+    LDATA = &level;
+    player = &Character[0];
+    crash_at(50, &masks);
+    Character[0].obj.mask = &mask;
+    mask.active = 2;
+    nw_time_trial_started();
+    CHECK(mask.active == 0);
+    mask.active = 0x228;
+    nw_time_trial_started();
+    CHECK(mask.active == 0);
+    level.flags = 0x200;
+    mask.active = 2;
+    nw_time_trial_started();
+    CHECK(mask.active == 2);
+    level.flags = 0;
+    crash_at(50, &retail);
+    Character[0].obj.mask = &mask;
+    nw_time_trial_started();
+    CHECK(mask.active == 2);
+    CHECK(!nw_time_trial_skip_pickup(&clock));
+
+    crash_at(50, &shots);
+    CHECK(!nw_time_trial_skip_pickup(&clock));
+    nw_time_trial_fruit(true);
+    CHECK(nw_time_trial_skip_pickup(&clock) && !nw_time_trial_skip_pickup(&crate));
+    nw_time_trial_fruit(false);
+    crash_at(50, &masks);
+    nw_time_trial_fruit(true);
+    CHECK(!nw_time_trial_skip_pickup(&clock));
+    nw_time_trial_fruit(false);
+    LDATA = was;
+    player = who;
 }
 
 static void mech_at(int hz, const NwProfile *p)
@@ -3483,6 +3528,7 @@ int main(void)
     line_2d();
     hazard_hitboxes();
     spin_fruit();
+    time_trial();
     air_jump();
     ground_slam();
     finish_top();

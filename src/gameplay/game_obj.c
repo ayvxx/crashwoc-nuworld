@@ -10,6 +10,7 @@
 #include "gameplay/mech.h"
 #include "gameplay/slidespin.h"
 #include "gameplay/submarine.h"
+#include "gameplay/timetrial.h"
 
 /* Declared by no header. */
 extern f32 in_speed;
@@ -101,4 +102,11 @@ s32 WumpaCollisions(struct obj_s *obj)
     obj->radius = radius;
     obj->attack = attack;
     return r;
+}
+
+void PickupItem(struct obj_s *obj)
+{
+    if (!nw_time_trial_skip_pickup(obj)) {
+        PickupItem__retail(obj);
+    }
 }

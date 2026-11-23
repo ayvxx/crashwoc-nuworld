@@ -195,6 +195,14 @@ typedef struct NwSpaceMovement {
     NW_SPACE_MOVEMENT(NW_CRASH_BOOL, NW_CRASH_BOOL, NW_CRASH_INT)
 } NwSpaceMovement;
 
+#define NW_TT_MOVEMENT(SW, FLAG, VAL) \
+    SW(no_masks, "Start without masks", true, "starting a time trial takes away the Aku Aku masks carried in") \
+    SW(no_fruit_clock, "Bazooka cannot start the clock", true, "flying fruit no longer starts a time trial")
+
+typedef struct NwTimeTrialMovement {
+    NW_TT_MOVEMENT(NW_CRASH_BOOL, NW_CRASH_BOOL, NW_CRASH_INT)
+} NwTimeTrialMovement;
+
 typedef struct NwMovement {
     int monkey_bar_speed;
     NwCrashMovement crash;
@@ -206,6 +214,7 @@ typedef struct NwMovement {
     NwFireflyMovement firefly;
     NwPlaneMovement plane;
     NwSpaceMovement spacefighter;
+    NwTimeTrialMovement time_trial;
 } NwMovement;
 
 #define NW_CRASH_NONE(...)
@@ -219,7 +228,8 @@ typedef struct NwMovement {
       .atlasphere = { NW_ATLAS_MOVEMENT(NW_CRASH_NONE, NW_CRASH_DEFAULT, NW_CRASH_DEFAULT) }, \
       .firefly = { NW_FIREFLY_MOVEMENT(NW_CRASH_NONE, NW_CRASH_DEFAULT, NW_CRASH_DEFAULT) }, \
       .plane = { NW_PLANE_MOVEMENT(NW_CRASH_NONE, NW_CRASH_DEFAULT, NW_CRASH_DEFAULT) }, \
-      .spacefighter = { NW_SPACE_MOVEMENT(NW_CRASH_NONE, NW_CRASH_DEFAULT, NW_CRASH_DEFAULT) } }
+      .spacefighter = { NW_SPACE_MOVEMENT(NW_CRASH_NONE, NW_CRASH_DEFAULT, NW_CRASH_DEFAULT) }, \
+      .time_trial = { NW_TT_MOVEMENT(NW_CRASH_NONE, NW_CRASH_DEFAULT, NW_CRASH_DEFAULT) } }
 #define NW_MOVEMENT_NHANCED \
     { .monkey_bar_speed = 335, .crash = { NW_CRASH_MOVEMENT(NW_CRASH_DEFAULT, NW_CRASH_DEFAULT, NW_CRASH_DEFAULT) }, \
       .coco = { NW_COCO_MOVEMENT(NW_CRASH_DEFAULT, NW_CRASH_DEFAULT, NW_CRASH_DEFAULT) }, \
@@ -229,7 +239,8 @@ typedef struct NwMovement {
       .atlasphere = { NW_ATLAS_MOVEMENT(NW_CRASH_DEFAULT, NW_CRASH_DEFAULT, NW_CRASH_DEFAULT) }, \
       .firefly = { NW_FIREFLY_MOVEMENT(NW_CRASH_DEFAULT, NW_CRASH_DEFAULT, NW_CRASH_DEFAULT) }, \
       .plane = { NW_PLANE_MOVEMENT(NW_CRASH_DEFAULT, NW_CRASH_DEFAULT, NW_CRASH_DEFAULT) }, \
-      .spacefighter = { NW_SPACE_MOVEMENT(NW_CRASH_DEFAULT, NW_CRASH_DEFAULT, NW_CRASH_DEFAULT) } }
+      .spacefighter = { NW_SPACE_MOVEMENT(NW_CRASH_DEFAULT, NW_CRASH_DEFAULT, NW_CRASH_DEFAULT) }, \
+      .time_trial = { NW_TT_MOVEMENT(NW_CRASH_DEFAULT, NW_CRASH_DEFAULT, NW_CRASH_DEFAULT) } }
 
 typedef enum NwMovementProfile {
     NW_MOVEMENT_PROFILE_RETAIL,

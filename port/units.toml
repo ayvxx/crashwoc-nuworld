@@ -139,10 +139,11 @@ schema = 1
 "game/inst" = { treatment = "compile" }
 "game/camera" = { treatment = "compile", wrap = ["MoveGameCamera"] }
 "game/game" = { treatment = "compile", wrap = ["CheckFinish", "DefaultTimeTrialNames", "DrawMenu", "DrawTransporters",
-    "GetMenuInfo", "HitWumpa", "InitObjectTable", "NewGame", "NewLevelTime", "ProcMenu", "SeekRot"], expose = ["dme_sx"] }
+    "GetMenuInfo", "HitWumpa", "InitObjectTable", "NewGame", "NewLevelTime", "ProcMenu", "SeekRot",
+    "StartTimeTrial", "UpdateWumpa"], expose = ["dme_sx"] }
 "game/crate" = { treatment = "compile", override = ["AddQuad3DrotXYZ"] }
 "game/game_obj" = { treatment = "compile", wrap = ["MoveLoopXZ", "PlayerCreatureCollisions", "ObjectRotation",
-    "UpdateProjectiles", "AddProjectile", "WumpaCollisions"] }
+    "UpdateProjectiles", "AddProjectile", "WumpaCollisions", "PickupItem"] }
 "game/visi" = { treatment = "compile" }
 "game/vehicle" = { treatment = "compile", wrap = ["BossBar", "ProcessMovementAtlas", "ControlGlider", "DrawGlider",
     "ProcessGliderMovement", "GliderFire", "DrawTorpedoTarget", "CollideGliderBullets"] }
