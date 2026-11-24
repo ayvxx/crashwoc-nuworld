@@ -134,7 +134,7 @@ schema = 1
     "MiniGameRender", "MiniGameRenderScore", "DoInput"] }
 "game/particle" = { treatment = "compile" }
 "game/listman" = { treatment = "compile" }
-"game/creature" = { treatment = "compile", wrap = ["CloseCreatures", "DrawCreatures", "LoadCharacterModels",
+"game/creature" = { treatment = "compile", wrap = ["CloseCreatures", "DrawCreatures", "DrawCharacterModel", "LoadCharacterModels",
     "MovePlayer"] }
 "game/inst" = { treatment = "compile" }
 "game/camera" = { treatment = "compile", wrap = ["MoveGameCamera"] }
@@ -142,7 +142,7 @@ schema = 1
     "GetMenuInfo", "HitWumpa", "InitObjectTable", "NewGame", "NewLevelTime", "ProcMenu", "SeekRot",
     "StartTimeTrial", "UpdateWumpa"], expose = ["dme_sx"] }
 "game/crate" = { treatment = "compile", override = ["AddQuad3DrotXYZ"] }
-"game/game_obj" = { treatment = "compile", wrap = ["MoveLoopXZ", "PlayerCreatureCollisions", "ObjectRotation",
+"game/game_obj" = { treatment = "compile", wrap = ["GetTopBot", "KillGameObject", "MoveLoopXZ", "PlayerCreatureCollisions", "ObjectRotation",
     "UpdateProjectiles", "AddProjectile", "WumpaCollisions", "PickupItem"] }
 "game/visi" = { treatment = "compile" }
 "game/vehicle" = { treatment = "compile", wrap = ["BossBar", "ProcessMovementAtlas", "ControlGlider", "DrawGlider",

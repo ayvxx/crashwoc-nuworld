@@ -6,6 +6,8 @@
 
 #include "gfx/rndr.h"
 #include "nu3d/nutex.h"
+#include "nu3d/nugscn.h"
+#include "nu3d/numtl.h"
 #include "nucore/nuerror.h"
 
 #define nutex_srcfile "..\\nu2crash.ps2\\nu3d\\nutex.c"
@@ -117,4 +119,38 @@ int NuTexCreateNative(void *data)
     }
     nw_ps2tx_set(ps2tex, gpu);
     return slot + 1;
+}
+
+/* CRATES.GSC has a dedicated texture for the Coco 1-Up crate faces. */
+void nw_coco_crate_texture(struct nugscn_s *scene)
+{
+    enum { portrait_slot = 31, size = 128 };
+    if (!scene || scene->numtid <= portrait_slot || !scene->tids[portrait_slot]) return;
+    const char *directory = SDL_GetBasePath();
+    char *path = NULL;
+    if (!directory || SDL_asprintf(&path, "%sCocoCrate.bgr", directory) < 0) return;
+    size_t bytes = 0;
+    void *pixels = SDL_LoadFile(path, &bytes);
+    SDL_free(path);
+    if (!pixels || bytes != size * size * 3) {
+        SDL_free(pixels);
+        return;
+    }
+
+    struct nutex_s spec = {2, size, size, 1, pixels, NULL};
+    const int tid = NuTexCreate(&spec);
+    SDL_free(pixels);
+    if (!tid) return;
+    const int previous = scene->tids[portrait_slot];
+    for (int i = 0; i < scene->nummtl; ++i) {
+        struct numtl_s *mtl = scene->mtls[i];
+        if (mtl && mtl->tid == previous) {
+            NuTexUnRef(previous);
+            NuTexRef(tid);
+            mtl->tid = tid;
+            NuMtlUpdate(mtl);
+        }
+    }
+    scene->tids[portrait_slot] = tid;
+    NuTexDestroy(previous);
 }

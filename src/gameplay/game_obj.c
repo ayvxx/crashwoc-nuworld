@@ -33,8 +33,8 @@ void MoveLoopXZ(struct obj_s *obj, u16 *hdg)
         MoveLoopXZ__retail(obj, hdg);
         return;
     }
+    nw_ground_steer(&Character[0], hdg);
     if (crash) {
-        nw_ground_steer(&Character[0], hdg);
         nw_slide_spin_loop(&Character[0], hdg);
     }
     struct nuvec_s v;
@@ -109,4 +109,41 @@ void PickupItem(struct obj_s *obj)
     if (!nw_time_trial_skip_pickup(obj)) {
         PickupItem__retail(obj);
     }
+}
+
+extern s32 VEHICLECONTROL;
+
+void GetTopBot(struct creature_s *c)
+{
+    GetTopBot__retail(c);
+    if (c == player && c->obj.character == 1 && VEHICLECONTROL == 0 &&
+        c->slide && !c->obj.dangle && !(c->obj.flags & 0x10000) &&
+        (c->obj.ground || c->obj.old_ground)) {
+        c->obj.top = (c->obj.min.y + c->obj.max.y) * 0.5f;
+    }
+}
+
+bool nw_coco_is_scuba_player(const struct obj_s *obj);
+float nw_coco_scuba_killed(struct obj_s *obj);
+
+s32 KillGameObject(struct obj_s *obj, s32 cause)
+{
+    const bool coco_scuba = nw_coco_is_scuba_player(obj);
+    const short character = obj->character;
+    const bool stock_scatter = coco_scuba && (cause == 0x0e || cause == 0x14);
+    if (coco_scuba) obj->character = stock_scatter ? 0 : 1;
+    const s32 result = KillGameObject__retail(obj, cause);
+    obj->character = character;
+    if (obj == &Character[0].obj && character == 1 && !coco_scuba && result &&
+        (cause == 6 || cause == 7 || cause == 0x0e)) {
+        extern void GameSfx(s32, struct nuvec_s *);
+        GameSfx(0x15, &obj->pos);
+    }
+    if (coco_scuba && !stock_scatter && result && obj->dead) {
+        const float duration = nw_coco_scuba_killed(obj);
+        if (duration > obj->die_duration) {
+            obj->die_duration = duration;
+        }
+    }
+    return result;
 }

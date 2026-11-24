@@ -1,0 +1,23 @@
+--- a/src/game/creature.c
++++ b/src/game/creature.c
+@@ -4296,7 +4296,8 @@
+             model = c->obj.model;
+         }
+         if (c->obj.dead != 0x16 && c->obj.dead != 4) {
+-            UpdateAnimPacket(model, &c->obj.anim, 0.59999996f,
++            extern float nw_coco_atlas_animation(struct creature_s *, float);
++            UpdateAnimPacket(model, &c->obj.anim, nw_coco_atlas_animation(c, 0.59999996f),
+                              c->obj.xz_distance);
+         }
+     }
+@@ -5290,7 +5291,9 @@
+                        (c->target != 0) && (c->obj.character == 0) &&
+                        (VEHICLE == -1)) {
+                 j = 0x8C;
+-            } else if ((VEHICLE != -1) && (vtog_time == vtog_duration)) {
++            } else if (VEHICLE != -1 && (vtog_time == vtog_duration ||
++                       (vflag != 0 && VEHICLE == 0x20 && VEHICLECONTROL == 1 &&
++                        c->obj.character == 1 && !c->obj.dead))) {
+                 if (VEHICLE == 0x6B) {
+                     j = 0x6B;
+                 } else if (VEHICLE == 0xA0) {

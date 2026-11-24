@@ -1,0 +1,20 @@
+--- a/src/nusound/nusound.c
++++ b/src/nusound/nusound.c
+@@ -734,6 +734,17 @@
+ }
+ 
+ 
++/* Resident sample registered after the stock global effects during sound startup. */
++void nw_coco_play_hurt(struct nuvec_s *pos, int left, int right, int pitch)
++{
++    if (!nusound_irx_loaded || (pos && !NuSoundApply3d(pos, &left, &right))) {
++        return;
++    }
++    SChan = find_free_channel(SChan);
++    play_sfx(0x109E, SChan, left, right, pitch, Attack, Release);
++    SChan = (SChan - 6 + 1) % 0x12 + 6;
++}
++
+ void NuSoundPlay3d(struct nuvec_s *pos, int sfx, int left, int right, int pitch)
+ {
+     if (nusound_irx_loaded) {

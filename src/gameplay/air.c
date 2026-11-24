@@ -47,7 +47,7 @@ typedef struct NwAirShape {
 
 static NwAirShape nw_air_shapes[2]; /* Crash's, Coco's */
 
-static bool nw_air_arc, nw_air_cut, nw_air_dash;
+static bool nw_air_arc, nw_air_cut, nw_air_dash, nw_air_double;
 static int nw_air_kind, nw_air_ticks;
 static u32 nw_air_frame; /* GameTimer's frame at the last MoveCRASH */
 
@@ -240,8 +240,13 @@ void nw_air_before(struct creature_s *plr, const struct nupad_s *pad)
 void nw_air_move(struct creature_s *plr, const struct nupad_s *pad)
 {
     const NwCrashMovement *c = nw_foot(plr);
-    const NwAirShape *s = nw_air_shape(c);
     bool doubled = plr->jump == 4 && plr->jump_frame == 0;
+    if (doubled) {
+        nw_air_double = true;
+    } else if (plr->jump < 4 || !nw_air_continued() || plr->obj.ground) {
+        nw_air_double = false;
+    }
+    const NwAirShape *s = nw_air_double ? &nw_air_shapes[0] : nw_air_shape(c);
     if (nw_air_faked_power) {
         Game.powerbits &= ~2;
     }

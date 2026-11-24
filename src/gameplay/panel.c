@@ -4,6 +4,7 @@
 #include "nu_port.h"
 #include "gameplay/gameplay.h"
 #include "gameplay/bosshealth.h"
+#include "gameplay/character_select.h"
 #include "gameplay/hubcrunch.h"
 #include "gameplay/hubgem.h"
 #include "gameplay/minigame.h"
@@ -31,6 +32,7 @@ void DrawPanelDebris(void)
     nw_hubgem_message();
     nw_vehicle_hints_draw();
     DrawPanelDebris__retail();
+    nw_character_select_draw();
 }
 
 void ResetPanelDebris(void)

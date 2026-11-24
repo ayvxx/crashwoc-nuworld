@@ -1,0 +1,40 @@
+--- a/src/game/creature.c
++++ b/src/game/creature.c
+@@ -1728,5 +1728,5 @@
+ struct nuvec_s loadsavepos = { 0.0f, 8.0f, 3.5f };
+ signed char CRemap[191] = { 0 };
+-struct CharacterModel CModel[NW_REV_DIM(48, 49)] = { 0 };
++struct CharacterModel CModel[NW_CHARACTER_MODEL_CAPACITY] = { 0 };
+ s8 CLetter[191] = { 0 };
+ struct creature_s Character[9] = { 0 };
+@@ -2241,5 +2241,5 @@
+         CLetter[i] = 0x3F;
+     }
+-    for (i = NW_REV(0x2F, 0x30); i >= 0; i--) {
++    for (i = NW_CHARACTER_MODEL_CAPACITY - 1; i >= 0; i--) {
+         CModel[i].obj = 0;
+     }
+@@ -2272,5 +2272,5 @@
+             character = LDATA->clist[i];
+         }
+-        if ((character != 0xFF) && (cmodel_index < NW_REV(0x30, 0x31))) {
++        if ((character != 0xFF) && (cmodel_index < NW_CHARACTER_MODEL_CAPACITY)) {
+             sprintf(tbuf, "loading %s", CData[character].name);
+             LoadScreen(tbuf);
+@@ -3743,8 +3743,5 @@
+                     }
+                 } else if (c->slide != 0) {
+-                    spd = 0.0f;
+-                    if (c->obj.character != 1) {
+-                        spd = minfo->SLIDESPEED;
+-                    }
++                    spd = minfo->SLIDESPEED;
+                 } else if (c->crawl != 0) {
+                     if (c->obj.pad_speed > 0.0f) {
+@@ -5727,5 +5724,5 @@
+         }
+     }
+-    for (i = 0; i < NW_REV(48, 49); i++) {
++    for (i = 0; i < NW_CHARACTER_MODEL_CAPACITY; i++) {
+         if (CModel[i].obj != 0) {
+             NuHGobjDestroy(CModel[i].obj);

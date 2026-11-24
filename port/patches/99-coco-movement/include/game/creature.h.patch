@@ -1,0 +1,10 @@
+--- a/include/game/creature.h
++++ b/include/game/creature.h
+@@ -329,5 +329,6 @@
+ extern struct creature_s OppTubCreature;
+ extern struct CharacterData CData[191];
+-extern struct CharacterModel CModel[NW_REV_DIM(48, 49)];
++enum { NW_CHARACTER_MODEL_CAPACITY = 52 };
++extern struct CharacterModel CModel[NW_CHARACTER_MODEL_CAPACITY];
+ extern signed char CRemap[191];
+ 

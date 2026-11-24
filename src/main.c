@@ -23,6 +23,7 @@
 #ifdef NW_WITH_GAME
 #include "data/image.h"
 #include "frontend/cheatpanel.h"
+#include "gameplay/character_select.h"
 #include "frontend/controlpanel.h"
 #include "frontend/debug.h"
 #include "frontend/profiles.h"
@@ -565,6 +566,25 @@ static bool nw_run_retail(void)
     return nw_pad_script || !nw_rev;
 }
 
+static void nw_boot_character_select(void *user)
+{
+    (void)user;
+    const int current = nw_character_select_status();
+    if (!current) {
+        nw_debug_text("Character select is available in the Warp Room.");
+        return;
+    }
+
+    nw_debug_text("Playing as %s", current == 2 ? "Coco" : "Crash");
+    if (nw_debug_button("Crash")) {
+        nw_character_select_request(0);
+    }
+    nw_debug_same_line(0.0f);
+    if (nw_debug_button("Coco")) {
+        nw_character_select_request(1);
+    }
+}
+
 static void nw_overlay_conflict(void *user, const char *key)
 {
     nw_log_warn(NW_LOG_LOAD, "--overlay %s: %s is in an earlier overlay too; this one wins", (const char *)user, key);
@@ -580,6 +600,7 @@ static int nw_boot_prepare(const char *data_dir, NwClockMode mode, bool hardware
     void *elf = vfs_open ? nw_read_elf(&vfs, &size) : NULL;
     char *saves = root ? nw_paths_dir(root, NW_PATHS_SAVES, false) : NULL;
     nw_saves_init(saves);
+    nw_character_select_load_choice(root);
     nw_savemenu_platform(nw_prompts_on_deck());
     SDL_free(saves);
     SDL_free(root);
@@ -1247,6 +1268,7 @@ static int nw_boot(const char *data_dir, int hardware_speed, float aspect, NwPla
     nw_debug_toggle("Gameplay", "Aku Aku after the first boss", &settings.first_boss_cut);
     nw_debug_toggle("Gameplay", "Vehicle controls", &settings.vehicle_hints);
     nw_debug_toggle("Gameplay", "PS2 bug fixes", &settings.bug_fixes);
+    nw_debug_panel("Gameplay", "Character Select", nw_boot_character_select, NULL, false);
     if (!nw_run_retail()) {
         nw_cheat_panel_start();
     }

@@ -1,0 +1,28 @@
+--- a/src/game/panel.c
++++ b/src/game/panel.c
+@@ -1560,10 +1560,7 @@
+ 
+             if (((LDATA->flags & 0x200) != 0) && (VEHICLECONTROL == 1) &&
+                 (plr->obj.finished == 0)) {
+-                i = 0x11;
+-                if (LDATA->character == 1) {
+-                    i = 0x12;
+-                }
++                i = plr->obj.character == 1 ? 0x12 : 0x11;
+                 DrawPanel3DObject(i, -0.8f, -0.8f, 1.0f, 0.3f, 0.3f, 0.3f, wobble_x,
+                                   wobble_y + 0xE000, 0, ObjTab[i].obj.scene,
+                                   ObjTab[i].obj.special, 1);
+@@ -1610,9 +1607,10 @@
+                                              PANELBLIMPSCALE);
+                 }
+             } else if ((Level == 0x15) && (plr->obj.finished == 0)) {
+-                DrawPanel3DObject(0x11, -0.8f, -0.8f, 1.0f, 0.3f, 0.3f, 0.3f, wobble_x,
+-                                  wobble_y + 0xE000, 0, ObjTab[0x11].obj.scene,
+-                                  ObjTab[0x11].obj.special, 1);
++                i = plr->obj.character == 1 ? 0x12 : 0x11;
++                DrawPanel3DObject(i, -0.8f, -0.8f, 1.0f, 0.3f, 0.3f, 0.3f, wobble_x,
++                                  wobble_y + 0xE000, 0, ObjTab[i].obj.scene,
++                                  ObjTab[i].obj.special, 1);
+                 sprintf(tbuf, "%.3i%%", GetRumblePlayerHealthPercentage(plr));
+                 if (tbuf[0] == '0') {
+                     if (tbuf[1] == '0') {

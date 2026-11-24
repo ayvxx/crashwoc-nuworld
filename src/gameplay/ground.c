@@ -119,6 +119,10 @@ void nw_ground_apply(void)
     if (CrashMoveInfo.SLIDEFRAMES == nw_ground_slide) {
         CrashMoveInfo.SLIDEFRAMES = slide;
     }
+    /* A missing Crash slide clip returns one second from ModelAnimDuration. */
+    const int crash_model = CRemap[0];
+    const bool has_crash_slide = crash_model >= 0 && CModel[crash_model].anmdata[0x43] != NULL;
+    CocoMoveInfo.SLIDEFRAMES = c->slide || has_crash_slide ? slide : nw_ground_frames(467);
     nw_ground_slide_speed = slide_speed;
     nw_ground_slide = slide;
 }

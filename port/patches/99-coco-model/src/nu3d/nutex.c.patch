@@ -1,0 +1,11 @@
+--- a/src/nu3d/nutex.c
++++ b/src/nu3d/nutex.c
+@@ -213,6 +213,8 @@
+ inline void NuTexInitEx(union variptr_u *buff, int count) {
+     int size;
+     struct nutexslot_s *list;
++    extern void nw_coco_reset_materials(void);
++    nw_coco_reset_materials();
+ 
+     if (initialised) {
+         NuTexClose();

@@ -168,6 +168,10 @@ static void ADPCM_AllocIOPMemory(unsigned i, uint32_t spuaddr, int size)
 static void SoundStoreLocalStart(void)
 {
     irx.GlobalSfxfileinfo_cnt = irx.fileinfo_cnt;
+    /* The extra Coco sample stays in SPU memory. Local filenames still start at 0xC5. */
+    if (irx.fileinfo_cnt == 0xC6 && irx.ADPCM_FileNames[0xC5].ID == 0x109E) {
+        irx.GlobalSfxfileinfo_cnt = 0xC5;
+    }
     irx.GlobalSfxMemoryEnd = irx.StreamMemoryEnd;
 }
 

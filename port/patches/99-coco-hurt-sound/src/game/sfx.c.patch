@@ -1,0 +1,38 @@
+--- a/src/game/sfx.c
++++ b/src/game/sfx.c
+@@ -1081,10 +1081,14 @@
+         SfxInfo[i].LoopInfo = SfxTabGLOBAL[i].stream;
+         SfxInfo[i].ID = SfxTabGLOBAL[i].id;
+     }
+-    NuStrCpy(SfxInfo[i].Filename, "");
+-    SfxInfo[i].Pitch = 0;
+-    SfxInfo[i].LoopInfo = 1;
+-    SfxInfo[i].ID = -1;
++    NuStrCpy(SfxInfo[i].Filename, "SFX\\LEVSPEC\\USCOC20C.VAG");
++    SfxInfo[i].Pitch = 11025;
++    SfxInfo[i].LoopInfo = 0;
++    SfxInfo[i].ID = 0x109E;
++    NuStrCpy(SfxInfo[i + 1].Filename, "");
++    SfxInfo[i + 1].Pitch = 0;
++    SfxInfo[i + 1].LoopInfo = 1;
++    SfxInfo[i + 1].ID = -1;
+     NuSoundSetGlobalDat("SFX.DAT");
+     NuSoundInit(SfxInfo);
+     SFXCOUNT_ALL = i;
+@@ -1311,7 +1315,15 @@
+     } else {
+         pitch = gamesfx_pitch;
+     }
+-    if (pos != 0) {
++    extern void nw_coco_play_hurt(struct nuvec_s *, int, int, int);
++    extern _Bool nw_coco_is_scuba_player(const struct obj_s *);
++    const int coco_hurt = PLAYERCOUNT != 0 && player &&
++                         (player->obj.character == 1 || nw_coco_is_scuba_player(&player->obj)) &&
++                         (((sfx == 0x14 || sfx == 0x15) && pos == &player->obj.pos) ||
++                          sfx == 0x5A);
++    if (coco_hurt) {
++        nw_coco_play_hurt(pos, vol, vol, 941);
++    } else if (pos != 0) {
+         NuSoundPlay3d(pos, sfx, vol, vol, pitch);
+     } else if (gamesfx_channel != -1) {
+         NuSoundPlayChan(sfx, vol, vol, pitch, gamesfx_channel);

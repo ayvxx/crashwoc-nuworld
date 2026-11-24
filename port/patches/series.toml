@@ -56,3 +56,23 @@ reason = "No time-tunnel LOADING screen before a cutscene: BGLoadCutMovie keeps 
 [[concern]]
 name = "99-relic-spin"
 reason = "The new time trial record's relic turns on the results like the pause panel's, and the glow behind a turning relic widens and narrows with it, with [game] relic_spin (NW_RELIC_SPIN, NW_RELIC_GLOW)."
+
+[[concern]]
+name = "99-coco-movement"
+reason = "Apply Coco slide speed and reserve model slots for her and the scuba gear."
+
+[[concern]]
+name = "99-coco-vehicle-animation"
+reason = "Drive the mech with its own clips and skip the opening samples of Coco's slide."
+
+[[concern]]
+name = "99-coco-model"
+reason = "Recreate custom Coco textures and materials after a level transition."
+
+[[concern]]
+name = "99-coco-hurt-sound"
+reason = "Load Coco's original hurt voice as a global resident sample."
+
+[[concern]]
+name = "99-coco-boss-portrait"
+reason = "Use the active character's portrait in boss health panels."

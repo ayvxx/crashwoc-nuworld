@@ -2,8 +2,12 @@
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
+#include <SDL3/SDL.h>
 
 #include "app.h"
+#include "data/image_tables.h"
+#include "game/creature.h"
+#include "game/gametypes.h"
 #include "gfx/interp.h"
 #include "gfx/rndr.h"
 #include "nu3d/nucamera.h"
@@ -773,9 +777,222 @@ int NuRndrGobjSkin(struct nugobj_s *gobj, struct numtx_s *wm, int njoints, struc
 }
 
 /* Skin palette is INV_WT x mtx_array, dwa[ix] the layer's weights; hgobj_enabled is 1 in retail, nothing clears it. */
+bool nw_coco_swim_render(struct NUHGOBJ_s *model, struct numtx_s *world, int *drawn);
+struct numtx_s *nw_coco_render_pose(struct NUHGOBJ_s *body, struct numtx_s *pose,
+                                    struct numtx_s *adjusted);
+
+struct NwCocoVertex {
+    float pos[3], uv[2], weight[3];
+    uint8_t joint[3], padding;
+};
+
+enum { NW_COCO_ATLAS_SIZE = 512, NW_COCO_POSES = 4, NW_COCO_JOINTS = 55 };
+static const struct NwCocoVertex *nw_coco_vertices;
+static const uint32_t *nw_coco_head;
+static uint32_t nw_coco_vertex_count, nw_coco_head_count;
+static struct numtl_s *nw_coco_materials[NW_COCO_POSES];
+static struct nuvec_s nw_coco_head_min, nw_coco_head_max;
+
+static bool nw_load_coco_model(void)
+{
+    static bool attempted;
+    if (attempted) return nw_coco_vertices != NULL;
+    attempted = true;
+    const char *directory = SDL_GetBasePath();
+    char *path = NULL;
+    if (!directory || SDL_asprintf(&path, "%sCocoModel.bin", directory) < 0) return false;
+    size_t size;
+    uint32_t *data = SDL_LoadFile(path, &size);
+    SDL_free(path);
+    if (!data) return false;
+
+    const size_t atlas_bytes = NW_COCO_ATLAS_SIZE * NW_COCO_ATLAS_SIZE * 3;
+    const uint32_t count = 2115;
+    const size_t mesh_bytes = count * sizeof(struct NwCocoVertex);
+    if (size < 16 || memcmp(data, "COC1", 4) || data[1] != count ||
+        data[2] == 0 || data[2] >= count || data[2] % 3 || data[3] != NW_COCO_JOINTS ||
+        size != 16 + mesh_bytes + data[2] * sizeof(uint32_t) + NW_COCO_POSES * atlas_bytes) {
+        SDL_free(data);
+        return false;
+    }
+    const struct NwCocoVertex *vertices = (const void *)(data + 4);
+    const uint32_t *head = (const void *)(vertices + count);
+    for (uint32_t i = 0; i < count; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            if (vertices[i].weight[j] && vertices[i].joint[j] >= NW_COCO_JOINTS) {
+                SDL_free(data);
+                return false;
+            }
+        }
+    }
+    nw_coco_head_min = (struct nuvec_s){INFINITY, INFINITY, INFINITY};
+    nw_coco_head_max = (struct nuvec_s){-INFINITY, -INFINITY, -INFINITY};
+    for (uint32_t i = 0; i < data[2]; ++i) {
+        if (head[i] >= count) {
+            SDL_free(data);
+            return false;
+        }
+        const float *p = vertices[head[i]].pos;
+        nw_coco_head_min.x = fminf(nw_coco_head_min.x, p[0]);
+        nw_coco_head_min.y = fminf(nw_coco_head_min.y, p[1]);
+        nw_coco_head_min.z = fminf(nw_coco_head_min.z, p[2]);
+        nw_coco_head_max.x = fmaxf(nw_coco_head_max.x, p[0]);
+        nw_coco_head_max.y = fmaxf(nw_coco_head_max.y, p[1]);
+        nw_coco_head_max.z = fmaxf(nw_coco_head_max.z, p[2]);
+    }
+    const size_t head_count = data[2];
+    nw_coco_vertex_count = count;
+    nw_coco_head_count = (uint32_t)head_count;
+    nw_coco_vertices = vertices;
+    nw_coco_head = head;
+    return true;
+}
+
+void nw_coco_reset_materials(void)
+{
+    /* NuTexInit and NuMtlRelease reclaim the old level's allocations. */
+    memset(nw_coco_materials, 0, sizeof(nw_coco_materials));
+}
+
+static void nw_coco_create_materials(void)
+{
+    if (nw_coco_materials[0]) return;
+    uint8_t *texture = (void *)(nw_coco_head + nw_coco_head_count);
+    const size_t atlas_bytes = NW_COCO_ATLAS_SIZE * NW_COCO_ATLAS_SIZE * 3;
+    for (int i = 0; i < NW_COCO_POSES; ++i) {
+        struct nutex_s spec = {2, NW_COCO_ATLAS_SIZE, NW_COCO_ATLAS_SIZE, 1, texture, NULL};
+        struct numtl_s *mtl = NuMtlCreate(1);
+        mtl->diffuse.r = mtl->diffuse.g = mtl->diffuse.b = 1.0f;
+        mtl->alpha = 1.0f;
+        mtl->attrib.cull = 2;
+        mtl->tid = NuTexCreate(&spec);
+        /* Draw the opaque rider before translucent vehicle glass. */
+        NuMtlRemove(mtl);
+        mtl->sort_pri = 0;
+        NuMtlInsert(mtl);
+        NuMtlUpdate(mtl);
+        nw_coco_materials[i] = mtl;
+        texture += atlas_bytes;
+    }
+}
+
+bool nw_coco_player_eyes_closed(void);
+bool nw_coco_body_eyes_closed(void);
+
+static struct numtl_s *nw_coco_blink_material(bool closed)
+{
+    extern struct gtimer_s GameTimer;
+    /* Two simulation ticks per Vita animation frame. Share the pose with the portrait. */
+    const uint32_t frame = GameTimer.frame / 2;
+    uint32_t pattern = (frame / 120 + 1) * 0x9e3779b9u;
+    pattern ^= pattern >> 16;
+    pattern *= 0x7feb352du;
+    pattern ^= pattern >> 15;
+    const unsigned start = 54 + pattern % 13;
+    unsigned phase = frame % 120 - start;
+    if ((pattern >> 8) % 3 == 0 && phase >= 12) phase -= 12;
+    const unsigned blink = phase < 2 ? phase + 1 : phase < 4 ? 3 : phase < 6 ? 6 - phase : 0;
+    nw_coco_create_materials();
+    return nw_coco_materials[closed ? 3 : blink];
+}
+
+static NwVuSpriteVertex *nw_coco_model_stream(struct numtx_s *world, uint32_t count, bool closed)
+{
+    static const NwVuProg textured = {.name = "vu_load_tricu_mpg"};
+    struct numtl_s *mtl = nw_coco_blink_material(closed);
+    NwVuSpriteVertex *out;
+    NuRndrSetLocalMtx(world, 2);
+    NuRndrStreamAddMtl(&mtl->rs, mtl);
+    nw_rndr_verts(&mtl->rs, NW_VERTS_TRIS, count, &out)->mpg = &textured;
+    return out;
+}
+
+static NwVuSpriteVertex nw_coco_model_vertex(const struct NwCocoVertex *in, struct nuvec_s p)
+{
+    return (NwVuSpriteVertex){
+        .pos = {p.x, p.y, p.z, 0},
+        .tex = {in->uv[0] * 4096, in->uv[1] * 4096, 0, 0},
+        .col = {128, 128, 128, 128},
+    };
+}
+
+static bool nw_draw_coco_model(struct NUHGOBJ_s *body, struct numtx_s *world, struct numtx_s *pose)
+{
+    if (!pose || CRemap[1] < 0 || CModel[CRemap[1]].obj != body ||
+        body->num_joints != NW_COCO_JOINTS || !nw_load_coco_model()) return false;
+
+    struct numtx_s palette[NW_COCO_JOINTS];
+    NuMtxMulArrayVU0(palette, body->INV_WT, pose, NW_COCO_JOINTS);
+    NwVuSpriteVertex *out = nw_coco_model_stream(world, nw_coco_vertex_count, nw_coco_body_eyes_closed());
+    for (uint32_t i = 0; i < nw_coco_vertex_count; ++i) {
+        const struct NwCocoVertex *in = &nw_coco_vertices[i];
+        struct nuvec_s src = {in->pos[0], in->pos[1], in->pos[2]};
+        struct nuvec_s pos = {0};
+        for (int j = 0; j < 3; ++j) {
+            if (!in->weight[j]) continue;
+            struct nuvec_s point;
+            NuVecMtxTransform(&point, &src, &palette[in->joint[j]]);
+            pos.x += point.x * in->weight[j];
+            pos.y += point.y * in->weight[j];
+            pos.z += point.z * in->weight[j];
+        }
+        out[i] = nw_coco_model_vertex(in, pos);
+    }
+    return true;
+}
+
+int nw_draw_coco_lives_head(struct nugobj_s *stock, struct numtx_s *world)
+{
+    if (!nw_load_coco_model()) return NuRndrGScnObj(stock, world);
+    const struct nuvec_s min = nw_coco_head_min, max = nw_coco_head_max;
+    const float scale = (stock->max.y - stock->min.y) / (max.y - min.y);
+    const struct nuvec_s shift = {
+        (stock->min.x + stock->max.x - (min.x + max.x) * scale) * 0.5f,
+        (stock->min.y + stock->max.y - (min.y + max.y) * scale) * 0.5f,
+        (stock->min.z + stock->max.z - (min.z + max.z) * scale) * 0.5f,
+    };
+    NwVuSpriteVertex *out = nw_coco_model_stream(world, nw_coco_head_count, nw_coco_player_eyes_closed());
+    for (uint32_t i = 0; i < nw_coco_head_count; ++i) {
+        const struct NwCocoVertex *in = &nw_coco_vertices[nw_coco_head[i]];
+        out[i] = nw_coco_model_vertex(in, (struct nuvec_s){
+            in->pos[0] * scale + shift.x,
+            in->pos[1] * scale + shift.y,
+            in->pos[2] * scale + shift.z,
+        });
+    }
+    return 1;
+}
+
+
+int NuHGobjRndrMtxDwa(struct NUHGOBJ_s *, struct numtx_s *, int, short *,
+                     struct numtx_s *, float **);
+static struct NUHGOBJ_s *nw_coco_fin_gear;
+
+static bool nw_is_coco_fin(const struct NUHGOBJ_s *gear, int joint)
+{
+    const char *name = gear->joints[joint].name;
+    return name && (SDL_strcasecmp(name, "leftFlipper") == 0 ||
+                    SDL_strcasecmp(name, "rightFlipper") == 0);
+}
+
+int nw_draw_coco_gear(struct NUHGOBJ_s *gear, struct numtx_s *world, struct numtx_s *pose)
+{
+    struct NUHGOBJ_s *previous = nw_coco_fin_gear;
+    nw_coco_fin_gear = gear;
+    const int drawn = NuHGobjRndrMtxDwa(gear, world, 1, NULL, pose, NULL);
+    nw_coco_fin_gear = previous;
+    return drawn;
+}
+
 int NuHGobjRndrMtxDwa(struct NUHGOBJ_s *hobj, struct numtx_s *wm, int nlayers, short *layer, struct numtx_s *mtx_array,
                       float **dwa)
 {
+    int coco_drawn;
+    if (nw_coco_swim_render(hobj, wm, &coco_drawn)) {
+        return coco_drawn;
+    }
+    struct numtx_s adjusted[256];
+    mtx_array = nw_coco_render_pose(hobj, mtx_array, adjusted);
     struct numtx_s mtx;
     int rv = 0;
     NwInterpScope scope = nw_interp_begin(wm, hobj, wm, nw_rndr_radius(&hobj->bbox_min, &hobj->bbox_max));
@@ -803,6 +1020,11 @@ int NuHGobjRndrMtxDwa(struct NUHGOBJ_s *hobj, struct numtx_s *wm, int nlayers, s
             }
         }
     }
+    if (nw_draw_coco_model(hobj, wm, mtx_array)) {
+        nw_rndr_model_end();
+        nw_interp_end(scope);
+        return vis;
+    }
     for (int i = 0; i < nlayers; i++) {
         int ix = 0;
         if (layer) {
@@ -822,7 +1044,9 @@ int NuHGobjRndrMtxDwa(struct NUHGOBJ_s *hobj, struct numtx_s *wm, int nlayers, s
                     nw_interp_at((uint32_t)ix, (uint32_t)set, (uint32_t)j);
                     nw_interp_joint((uint32_t)j);
                     NuMtxMulVU0(&mtx, &mtx_array[j], wm);
-                    rv |= NuRndrGobj(gobjs[j], &mtx);
+                    if (hobj != nw_coco_fin_gear || !nw_is_coco_fin(hobj, j)) {
+                        rv |= NuRndrGobj(gobjs[j], &mtx);
+                    }
                 }
             }
         }

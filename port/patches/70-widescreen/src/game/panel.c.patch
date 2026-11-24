@@ -1,14 +1,18 @@
 --- a/src/game/panel.c
 +++ b/src/game/panel.c
-@@ -207,6 +207,7 @@ inline s32 DrawPanel3DObject(s32 object, float x, float y, float z, float scalex
+@@ -207,6 +207,11 @@ inline s32 DrawPanel3DObject(s32 object, float x, float y, float z, float scalex
          m._30 = x * PANEL3DMULX;
          m._31 = y * PANEL3DMULY;
          m._32 = z;
 +        NW_WIDE_HUD(&m);
++        if (object == 0x12) {
++            extern int nw_draw_coco_lives_head(struct nugobj_s *, struct numtx_s *);
++            return nw_draw_coco_lives_head(scn->gobjs[obj->instance->objid], &m);
++        }
          return NuRndrGScnObj(scn->gobjs[obj->instance->objid], &m);
      }
      return 0;
-@@ -281,6 +282,7 @@ inline s32 DrawPanel3DTempCharacter(u16 xrot, u16 yrot, u16 zrot, s32 rot, float
+@@ -281,6 +286,7 @@ inline s32 DrawPanel3DTempCharacter(u16 xrot, u16 yrot, u16 zrot, s32 rot, float
      m._32 = z;
      m._30 = x * PANEL3DMULX;
      m._31 = y * PANEL3DMULY;
@@ -16,7 +20,7 @@
      EvalModelAnim(model, &TempAnim, &m, tmtx, &dwa, 0);
      return NuHGobjRndrMtxDwa(model->obj, &m, 1, 0, tmtx, dwa);
  }
-@@ -288,6 +290,7 @@ inline s32 DrawPanel3DTempCharacter(u16 xrot, u16 yrot, u16 zrot, s32 rot, float
+@@ -288,6 +294,7 @@ inline s32 DrawPanel3DTempCharacter(u16 xrot, u16 yrot, u16 zrot, s32 rot, float
  
  inline void MaxVP(void) {
      NuVpSetSize((float)(MAXVPSIZEX << 4), (float)(MAXVPSIZEY << 3));
@@ -24,7 +28,7 @@
  }
  
  
-@@ -304,10 +307,12 @@ inline void GameVP(void) {
+@@ -304,10 +311,12 @@ inline void GameVP(void) {
      if ((editor_active != 0) ||
          ((paused != 0) && ((Cursor.menu < 3) || (Cursor.menu > 8)))) {
          NuVpSetSize((float)(MAXVPSIZEX << 4), (float)(MAXVPSIZEY << 3));
@@ -37,7 +41,7 @@
      }
  }
  
-@@ -535,6 +540,7 @@ s32 DrawPanel3DCharacter(s32 character, float x, float y, float z,
+@@ -535,6 +544,7 @@ s32 DrawPanel3DCharacter(s32 character, float x, float y, float z,
      m._32 = z;
      m._30 = x * PANEL3DMULX;
      m._31 = y * PANEL3DMULY;

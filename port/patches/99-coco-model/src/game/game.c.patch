@@ -1,0 +1,12 @@
+--- a/src/game/game.c
++++ b/src/game/game.c
+@@ -7428,7 +7428,8 @@
+     s32 i;
+ 
+     vehicle = player->obj.vehicle;
+-    if (vehicle == -1) {
++    if (vehicle == -1 || (vehicle == 0x20 && VEHICLECONTROL == 1 &&
++                          player->obj.character == 1 && !player->obj.dead)) {
+         return;
+     }
+     i = CRemap[vehicle];
