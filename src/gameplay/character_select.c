@@ -307,7 +307,7 @@ void nw_character_select_draw(void)
     const float z = dx * camera->_20 + dy * camera->_21 + dz * camera->_22;
     if (z < 1.0f) return;
     const float scale = SDL_min(2.0f, z * 0.23f);
-    Text3D("SPIN TO SWITCH CHARACTER", x / PANEL3DMULX, y / PANEL3DMULY, z,
+    Text3D("PRESS s TO SWITCH", x / PANEL3DMULX, y / PANEL3DMULY, z,
            scale, scale, scale, 0, 0);
 }
 
