@@ -141,6 +141,7 @@ typedef struct NwCmd {
     uint32_t mtl;                   /* into NwPacket.mtls, from material when the packet is published */
     uint32_t light;
     const void *mpg;                /* the microcode package (an NwVuProg) */
+    const NwGpuTex *texture_override; /* an alternate texture for this draw */
     const struct numtl_s *material; /* game thread only */
     union {
         struct {

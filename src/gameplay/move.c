@@ -42,9 +42,23 @@ void MoveCOCO(struct creature_s *plr, struct nupad_s *pad)
                        !plr->obj.transporting && !plr->freeze && fadeval <= 0 &&
                        Cursor.menu != 0x1f && Cursor.menu != 0x21 &&
                        GameTimer.frame >= NW_HZ(50, 60);
+    const bool using_crash_controls = ready && pad &&
+        (plr->target || (pad->paddata & 0x05));
     const bool grounded = plr->obj.ground != 0;
     const bool crouch = ready && pad && (pad->paddata & 0x20);
     const bool jump = ready && pad && (pad->paddata_db & 0x40);
+    const bool spin_blocks_slide = plr->spin &&
+        plr->spin_frame + 1 < plr->spin_frames - plr->minfo->SPINRESETFRAMES;
+    const bool defer_slide = crouch && grounded && !plr->jump && !plr->slide &&
+        !plr->crawl && !plr->crawl_lock && plr->obj.pad_speed > 0.0f && spin_blocks_slide;
+    if (defer_slide) {
+        struct nupad_s spin_pad = *pad;
+        spin_pad.paddata &= ~0x28;
+        spin_pad.paddata_db &= ~0x28;
+        MoveCOCO__retail(plr, &spin_pad);
+        return;
+    }
+    if (!using_crash_controls) plr->tiptoe = 0;
     const short previous_slide = plr->slide;
     const bool cancel_slide = jump && grounded && !plr->jump && previous_slide > 0;
 
@@ -78,7 +92,7 @@ void MoveCOCO(struct creature_s *plr, struct nupad_s *pad)
         plr->crouch_pos = 0;
     }
     if (ready && !cancel_slide && !plr->slide &&
-        (plr->crawl || plr->crouch_pos || (crouch && grounded && !plr->jump))) {
+        (using_crash_controls || plr->crawl || plr->crouch_pos || (crouch && grounded && !plr->jump))) {
         const short crouch_frames = CrashMoveInfo.CROUCHINGFRAMES;
         const short slide_frames = CrashMoveInfo.SLIDEFRAMES;
         CrashMoveInfo.CROUCHINGFRAMES = CocoMoveInfo.CROUCHINGFRAMES;
@@ -145,7 +159,13 @@ void AnimateCRASH(struct creature_s *plr)
 
 void AnimateCOCO(struct creature_s *plr)
 {
-    if (plr == player && plr->obj.dangle) {
+    if (plr == player && plr->target && !plr->obj.dead) {
+        AnimateCRASH__retail(plr);
+    } else if (plr == player && plr->tiptoe && !plr->obj.dead && !plr->jump &&
+               !plr->spin && !plr->slide && !plr->crawl && !plr->obj.dangle) {
+        AnimateCOCO__retail(plr);
+        plr->obj.anim.newaction = plr->obj.pad_speed > 0.0f ? 0x74 : 0x22;
+    } else if (plr == player && plr->obj.dangle) {
         AnimateCRASH__retail(plr);
     } else {
         AnimateCOCO__retail(plr);

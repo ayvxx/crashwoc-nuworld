@@ -6,8 +6,8 @@
          m._32 = z;
 +        NW_WIDE_HUD(&m);
 +        if (object == 0x12) {
-+            extern int nw_draw_coco_lives_head(struct nugobj_s *, struct numtx_s *);
-+            return nw_draw_coco_lives_head(scn->gobjs[obj->instance->objid], &m);
++            extern int nw_draw_coco_lives_head(struct nugscn_s *, struct nugobj_s *, struct numtx_s *);
++            return nw_draw_coco_lives_head(scn, scn->gobjs[obj->instance->objid], &m);
 +        }
          return NuRndrGScnObj(scn->gobjs[obj->instance->objid], &m);
      }

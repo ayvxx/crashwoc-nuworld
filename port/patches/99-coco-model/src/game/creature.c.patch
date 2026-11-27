@@ -1,8 +1,15 @@
 --- a/src/game/creature.c
 +++ b/src/game/creature.c
-@@ -4296,7 +4296,8 @@
+@@ -4296,7 +4296,15 @@
              model = c->obj.model;
          }
++        if (c->obj.dead == 0 && c->obj.character == 1) {
++            if (VEHICLECONTROL == 1 && c->obj.vehicle == 0x89 && CRemap[0x89] >= 0) {
++                model = &CModel[CRemap[0x89]];
++            } else if (VEHICLECONTROL == 0 && c->target && CRemap[0x8c] >= 0) {
++                model = &CModel[CRemap[0x8c]];
++            }
++        }
          if (c->obj.dead != 0x16 && c->obj.dead != 4) {
 -            UpdateAnimPacket(model, &c->obj.anim, 0.59999996f,
 +            extern float nw_coco_atlas_animation(struct creature_s *, float);
@@ -10,8 +17,9 @@
                               c->obj.xz_distance);
          }
      }
-@@ -5290,7 +5291,9 @@
-                        (c->target != 0) && (c->obj.character == 0) &&
+@@ -5290,7 +5298,9 @@
+-                       (c->target != 0) && (c->obj.character == 0) &&
++                       (c->target != 0) && (c->obj.character == 0 || c->obj.character == 1) &&
                         (VEHICLE == -1)) {
                  j = 0x8C;
 -            } else if ((VEHICLE != -1) && (vtog_time == vtog_duration)) {

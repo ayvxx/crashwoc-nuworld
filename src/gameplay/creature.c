@@ -18,6 +18,8 @@
 #include "nu3d/nuhgobj.h"
 #include "nu3d/nuanim.h"
 #include "numath/numtx.h"
+#include "numath/nuvec.h"
+#include "nu_port.h"
 #include "numath/nutrig.h"
 #include "game/gametypes.h"
 
@@ -54,6 +56,9 @@ float nw_coco_atlas_animation(struct creature_s *c, float dt)
     return dt * SDL_clamp(speed / (walking ? 0.029f : 0.060f), 0.60f, 1.65f);
 }
 
+static unsigned nw_coco_shot_frame;
+static bool nw_coco_shot_seen;
+
 void MovePlayer(struct creature_s *c, struct nupad_s *pad)
 {
     static struct nupad_s aim;
@@ -67,12 +72,19 @@ void MovePlayer(struct creature_s *c, struct nupad_s *pad)
     if (use_stock_swim_controls) {
         c->obj.character = 0;
     }
+    const unsigned previous_fire = c->fire;
     MovePlayer__retail(c, nw_mech_pad(c, pad, &aim));
     if (use_stock_swim_controls) {
         c->obj.character = 1;
     }
     nw_coco_swim_controls = false;
     if (c == player) {
+        if (c->obj.character != 1 || c->obj.dead || VEHICLECONTROL != 0 || !c->target) {
+            nw_coco_shot_seen = false;
+        } else if (c->fire > previous_fire) {
+            nw_coco_shot_frame = GameTimer.frame;
+            nw_coco_shot_seen = true;
+        }
         if (!c->obj.dead) nw_scuba_death_active = false;
         else if (nw_scuba_death_active) nw_coco_scuba_bubbles();
     }
@@ -81,6 +93,7 @@ void MovePlayer(struct creature_s *c, struct nupad_s *pad)
 
 void CloseCreatures(void)
 {
+    nw_coco_shot_seen = false;
     nw_scuba_death_active = false;
     nw_character_select_restore();
     nw_crunch_close();
@@ -161,8 +174,23 @@ static float nw_pilot_dot(struct nuvec_s a, struct nuvec_s b) {
 }
 
 static void nw_pilot_aim(const struct NUHGOBJ_s *body, struct numtx_s *pose,
-                          s32 joint, struct nuvec_s from, struct nuvec_s to) {
+                          s32 joint, struct nuvec_s from, struct nuvec_s to, bool shortest_arc) {
     struct numtx_s rotation;
+    if (shortest_arc) {
+        struct nuvec_s axis = {from.y * to.z - from.z * to.y,
+            from.z * to.x - from.x * to.z, from.x * to.y - from.y * to.x};
+        const float length = sqrtf(nw_pilot_dot(axis, axis));
+        const float dot = nw_pilot_dot(from, to);
+        if (length > 1.0e-8f) {
+            axis.x /= length;
+            axis.y /= length;
+            axis.z /= length;
+            NuMtxSetRotationAxis(&rotation, NuAtan2D(length, dot), &axis);
+            nw_rotate_hang_chain(body, pose, joint, &rotation);
+            return;
+        }
+        if (dot >= 0.0f) return;
+    }
     NuMtxSetIdentity(&rotation);
     NuMtxRotateZ(&rotation, NuAtan2D(from.x, from.y));
     NuMtxRotateX(&rotation, -NuAtan2D(from.z, sqrtf(from.x * from.x + from.y * from.y)));
@@ -173,7 +201,7 @@ static void nw_pilot_aim(const struct NUHGOBJ_s *body, struct numtx_s *pose,
 
 static void nw_pilot_place_limb(const struct NUHGOBJ_s *body, struct numtx_s *pose,
                                   s32 root, s32 hinge, s32 tip, struct nuvec_s goal,
-                                  struct nuvec_s pole) {
+                                  struct nuvec_s pole, bool shortest_arc) {
     struct nuvec_s upper = nw_pilot_direction(&pose[root], &pose[hinge]);
     struct nuvec_s lower = nw_pilot_direction(&pose[hinge], &pose[tip]);
     struct nuvec_s forward = { goal.x - pose[root]._30, goal.y - pose[root]._31, goal.z - pose[root]._32 };
@@ -202,13 +230,13 @@ static void nw_pilot_place_limb(const struct NUHGOBJ_s *body, struct numtx_s *po
     upper_goal.x = along * forward.x + height * pole.x;
     upper_goal.y = along * forward.y + height * pole.y;
     upper_goal.z = along * forward.z + height * pole.z;
-    nw_pilot_aim(body, pose, root, upper, upper_goal);
+    nw_pilot_aim(body, pose, root, upper, upper_goal, shortest_arc);
 
     lower = nw_pilot_direction(&pose[hinge], &pose[tip]);
     lower_goal.x = d * forward.x - upper_goal.x;
     lower_goal.y = d * forward.y - upper_goal.y;
     lower_goal.z = d * forward.z - upper_goal.z;
-    nw_pilot_aim(body, pose, hinge, lower, lower_goal);
+    nw_pilot_aim(body, pose, hinge, lower, lower_goal, shortest_arc);
 }
 
 static float nw_mech_limit_travel(float value, float limit) {
@@ -255,7 +283,7 @@ static void nw_pose_mech_pilot(const struct NUHGOBJ_s *body, struct numtx_s *pos
             pole = (struct nuvec_s){ side * 0.24f, 0.0f, -1.0f };
         }
         if (i == 2) foot_rest = pose[tip];
-        nw_pilot_place_limb(body, pose, root, hinge, tip, goal, pole);
+        nw_pilot_place_limb(body, pose, root, hinge, tip, goal, pole, false);
         if (i == 2) {
             struct numtx_s inverse, correction;
             s32 j;
@@ -336,16 +364,11 @@ static void nw_coco_hang_arm(struct NUHGOBJ_s *body, struct numtx_s *pose,
     nw_rotate_hang_chain(body, pose, arm, &reach);
 }
 
-static void nw_coco_hang_hair(struct NUHGOBJ_s *body, struct numtx_s *pose) {
-    enum { COCO_IDLE = 0x22 };
+static void nw_coco_sample_hair(struct NUHGOBJ_s *body, struct numtx_s *pose,
+                                struct nuanimdata_s *clip, float time) {
     struct numtx_s idle_pose[COCO_HANG_MAX_JOINTS];
     struct numtx_s inverse_face, head_transform;
-    struct CharacterModel *model = player->obj.model;
     s32 face = -1, quiff = -1, ponytail = -1, i;
-
-    if (model == NULL || model->obj != body || model->anmdata[COCO_IDLE] == NULL) {
-        return;
-    }
     for (i = 0; i < body->num_joints; i++) {
         const char *name = nw_coco_joint_name(body, i);
         if (name == NULL) continue;
@@ -356,7 +379,7 @@ static void nw_coco_hang_hair(struct NUHGOBJ_s *body, struct numtx_s *pose) {
     if (face < 0 || quiff < 0 || ponytail < 0) {
         return;
     }
-    NuHGobjEvalAnim(body, model->anmdata[COCO_IDLE], 1.0f, 0, NULL, idle_pose);
+    NuHGobjEvalAnim(body, clip, time, 0, NULL, idle_pose);
     NuMtxInvH(&inverse_face, &idle_pose[face]);
     NuMtxMulH(&head_transform, &inverse_face, &pose[face]);
     for (i = 0; i < body->num_joints; i++) {
@@ -465,6 +488,37 @@ static int nw_coco_find_joint(const struct NUHGOBJ_s *body, const char *name)
     }
     return -1;
 }
+
+static void nw_coco_pose_hair(struct NUHGOBJ_s *body, struct numtx_s *pose, float jump)
+{
+    /* Animate the actual hair joints independently of the handle and arm solver. */
+    const float speed = SDL_clamp(player->obj.xz_distance / 0.075f, 0.0f, 1.0f);
+    const struct CharacterModel *model = player->obj.model;
+    if (model && model->obj == body) {
+        /* Retarget the walk or run hair joints relative to the current head. */
+        const unsigned action = speed > 0.55f ? 0x3a : 0x74;
+        struct nuanimdata_s *clip = model->anmdata[action];
+        if (!clip) clip = model->anmdata[0x74];
+        if (clip && clip->time > 1.0f) {
+            const float cycle = clip->time - 1.0f;
+            const float phase = fmodf(GameTimer.frame * NW_HZ(0.52f, 0.433333f), cycle);
+            nw_coco_sample_hair(body, pose, clip, 1.0f + phase);
+        }
+    }
+    const float flutter = NuTrigTable[(u16)(GameTimer.frame * 1230u)];
+    const int ponytail = nw_coco_find_joint(body, "hairDo");
+    const int bangs = nw_coco_find_joint(body, "quiff");
+    struct numtx_s hair;
+    if (ponytail >= 0) {
+        NuMtxSetRotationX(&hair, (int)((540.0f + 300.0f * speed) * flutter - 1500.0f * jump));
+        nw_rotate_hang_chain(body, pose, ponytail, &hair);
+    }
+    if (bangs >= 0) {
+        NuMtxSetRotationX(&hair, (int)(-(260.0f + 150.0f * speed) * flutter - 650.0f * jump));
+        nw_rotate_hang_chain(body, pose, bangs, &hair);
+    }
+}
+
 
 int nw_draw_coco_gear(struct NUHGOBJ_s *gear, struct numtx_s *world, struct numtx_s *pose);
 
@@ -707,8 +761,9 @@ static s32 nw_draw_coco_scuba(struct numtx_s *world, int spinning) {
             down_the_leg.y * kick_direction + current.y * animated_direction,
             down_the_leg.z * kick_direction + current.z * animated_direction,
         };
-        nw_pilot_aim(body, pose, foot, current, relaxed);
+        nw_pilot_aim(body, pose, foot, current, relaxed, false);
     }
+    nw_coco_pose_hair(body, pose, 0.0f);
     nw_coco_scuba_gear(&swim_world, body, pose);
     return NuHGobjRndrMtxDwa(body, &swim_world, body->num_layers, NULL, pose, NULL);
 }
@@ -787,6 +842,118 @@ static void nw_vehicle_seat_motion(struct numtx_s *world, const AnimPacket *anim
     }
 }
 
+static struct nuvec_s nw_coco_grips[2];
+static bool nw_coco_grips_valid;
+static struct nuvec_s nw_coco_rider_recoil;
+
+static struct nuvec_s nw_coco_body_recoil(struct numtx_s *rider_world)
+{
+    extern struct nuvec_s plr_target_dir;
+    const unsigned elapsed = (unsigned)GameTimer.frame - nw_coco_shot_frame;
+    if (!nw_coco_shot_seen || elapsed >= 18) return (struct nuvec_s){0};
+
+    const float remaining = 1.0f - elapsed / 18.0f;
+    const float impact = 0.15f * remaining * remaining;
+    struct nuvec_s world_offset = {-plr_target_dir.x * impact,
+        (0.28f - plr_target_dir.y) * impact, -plr_target_dir.z * impact};
+    struct numtx_s inverse;
+    NuMtxInvH(&inverse, rider_world);
+    inverse._30 = inverse._31 = inverse._32 = 0.0f;
+    struct nuvec_s local_offset;
+    NuVecMtxTransform(&local_offset, &world_offset, &inverse);
+    return local_offset;
+}
+
+static void nw_coco_bazooka_shot_pose(AnimPacket *anim)
+{
+    enum { BAZOOKA_FIRE = 0x4f };
+    if (!nw_coco_shot_seen || CRemap[0x8c] < 0) return;
+    const struct CharacterModel *gun = &CModel[CRemap[0x8c]];
+    if (!gun->anmdata[BAZOOKA_FIRE] || !gun->animlist[BAZOOKA_FIRE]) return;
+
+    /* Play the stock bzshoot clip once, including while blending back to aim. */
+    const unsigned elapsed = (unsigned)GameTimer.frame - nw_coco_shot_frame;
+    const float time = fminf(gun->anmdata[BAZOOKA_FIRE]->time,
+        1.0f + elapsed * NW_HZ(0.6f, 0.5f) * gun->animlist[BAZOOKA_FIRE]->speed);
+    if (!anim->blend && anim->action == BAZOOKA_FIRE) anim->anim_time = time;
+    if (anim->blend && anim->blend_src_action == BAZOOKA_FIRE) anim->blend_src_time = time;
+    if (anim->blend && anim->blend_dst_action == BAZOOKA_FIRE) anim->blend_dst_time = time;
+}
+
+static int nw_coco_bazooka_world(struct numtx_s *world)
+{
+    extern struct nuvec_s plr_target_dir;
+    /* Locked to the saved Coco bazooka fit. */
+    const float height = -0.205f, forward = 0.07f;
+    const int roll = -38 * 65536 / 360;
+    world->_30 += plr_target_dir.x * forward + world->_10 * height;
+    world->_31 += plr_target_dir.y * forward + world->_11 * height;
+    world->_32 += plr_target_dir.z * forward + world->_12 * height;
+    return roll;
+}
+
+static void nw_coco_sample_grips(int vehicle, const AnimPacket *anim,
+                                 struct numtx_s *attachment_world, struct numtx_s *rider_world, int roll)
+{
+    if (!anim || CRemap[vehicle] < 0) return;
+    struct CharacterModel *model = &CModel[CRemap[vehicle]];
+    struct NUHGOBJ_s *body = model->obj;
+    if (!body || !body->joints) return;
+    const bool bazooka = vehicle == 0x8c;
+    const int grip = nw_coco_find_joint(body, bazooka ? "main" : "joint1");
+    if (grip < 0) return;
+    struct NUJOINTANIM_s aim = {
+        .rx = (u16)-player->obj.target_xrot * 9.58738e-05f,
+        .ry = (u16)-player->obj.target_yrot * 9.58738e-05f,
+        .sx = 1.0f, .sy = 1.0f, .sz = 1.0f, .flags = 1
+    };
+    struct numtx_s joints[256], inverse, world_grip, rider_grip;
+    const unsigned from = anim->blend_src_action, to = anim->blend_dst_action, action = anim->action;
+    if (anim->blend && anim->blend_frames && from < 0x76 && to < 0x76 &&
+        model->anmdata[from] && model->anmdata[to]) {
+        NuHGobjEvalAnimBlend(body, model->anmdata[from], anim->blend_src_time,
+            model->anmdata[to], anim->blend_dst_time, (float)anim->blend_frame / anim->blend_frames,
+            bazooka ? 1 : 0, bazooka ? &aim : NULL, joints);
+    } else if (action < 0x76 && model->anmdata[action]) {
+        NuHGobjEvalAnim(body, model->anmdata[action], anim->anim_time,
+                       bazooka ? 1 : 0, bazooka ? &aim : NULL, joints);
+    } else {
+        NuHGobjEval(body, bazooka ? 1 : 0, bazooka ? &aim : NULL, joints);
+    }
+    NuMtxMulH(&world_grip, &joints[grip], attachment_world);
+    if (bazooka && roll && model->pLOCATOR[0]) {
+        /* Roll around the firing line through the animated muzzle. */
+        extern struct nuvec_s plr_target_dir;
+        struct numtx_s muzzle, barrel_turn;
+        NuHGobjPOIMtx(body, 0, attachment_world, joints, &muzzle);
+        struct nuvec_s pivot = {muzzle._30, muzzle._31, muzzle._32};
+        struct nuvec_s axis = plr_target_dir;
+        NuMtxSetRotationAxis(&barrel_turn, roll, &axis);
+        struct nuvec_s rotated_pivot;
+        NuVecMtxTransform(&rotated_pivot, &pivot, &barrel_turn);
+        barrel_turn._30 = pivot.x - rotated_pivot.x;
+        barrel_turn._31 = pivot.y - rotated_pivot.y;
+        barrel_turn._32 = pivot.z - rotated_pivot.z;
+        struct numtx_s rolled_attachment;
+        NuMtxMulH(&rolled_attachment, attachment_world, &barrel_turn);
+        *attachment_world = rolled_attachment;
+        NuMtxMulH(&world_grip, &joints[grip], attachment_world);
+    }
+    if (!rider_world) return;
+    NuMtxInvH(&inverse, rider_world);
+    NuMtxMulH(&rider_grip, &world_grip, &inverse);
+    struct nuvec_s points[2] = {{-0.105f, -0.038f, 0.015f}, {0.055f, -0.055f, 0.015f}};
+    if (!bazooka) {
+        /* joint1 local +X points toward the cart front. Use the rear blue cap. */
+        points[0] = (struct nuvec_s){-0.337f, 0.0f, -0.055f};
+        points[1] = (struct nuvec_s){-0.337f, 0.0f, 0.047f};
+    }
+    for (int side = 0; side < 2; ++side) {
+        NuVecMtxTransform(&nw_coco_grips[side], &points[side], &rider_grip);
+    }
+    nw_coco_grips_valid = true;
+}
+
 s32 DrawCharacterModel(struct CharacterModel *model, AnimPacket *anim,
                        struct numtx_s *world, struct numtx_s *shadow, s32 render,
                        struct numtx_s *reflection, struct numtx_s *locators,
@@ -798,6 +965,9 @@ s32 DrawCharacterModel(struct CharacterModel *model, AnimPacket *anim,
     }
     struct numtx_s seat;
     AnimPacket rider;
+    struct numtx_s *const base_world = world;
+    const AnimPacket *const attachment_anim = anim;
+    nw_coco_grips_valid = false;
     struct nw_mech_pilot pilot = {0};
     const bool coco = player && obj == &player->obj && obj->character == 1 &&
                       model == obj->model && !obj->dead;
@@ -809,6 +979,7 @@ s32 DrawCharacterModel(struct CharacterModel *model, AnimPacket *anim,
         int seat_vehicle = obj->vehicle;
         const char *seat_joint = NULL;
         int seat_idle = 0x62;
+        int rider_action = -1;
         switch (obj->vehicle) {
         case 0xa1: /* Mine tub */
             seat_joint = "centre";
@@ -842,9 +1013,15 @@ s32 DrawCharacterModel(struct CharacterModel *model, AnimPacket *anim,
             nw_coco_biplane_back = back;
             nw_coco_plane_pose = true;
             break;
-        case 0x81: /* Dropship */
+        case 0x81: /* Crashteroids uses Coco's original dropship pose. */
+            rider_action = 0x62;
+            break;
+        case 0x89: /* Gold Rush handcar */
+            seat_joint = "joint11";
+            seat_idle = 0x68;
             lift = 0.29f;
-            nw_coco_plane_pose = true;
+            back = -0.43f;
+            rider_action = 0x22;
             break;
         case 0x8b: /* Firefly */
             lift = 0.04f;
@@ -865,12 +1042,54 @@ s32 DrawCharacterModel(struct CharacterModel *model, AnimPacket *anim,
         seat._31 += seat._11 * lift - seat._21 * back;
         seat._32 += seat._12 * lift - seat._22 * back;
         world = &seat;
-        if (anim && (seat_joint || nw_coco_plane_pose || obj->vehicle == 0x20 || (unsigned)anim->action >= 0x76 ||
+        if (anim && (rider_action >= 0 || seat_joint || nw_coco_plane_pose || obj->vehicle == 0x20 || (unsigned)anim->action >= 0x76 ||
                      !model->anmdata[anim->action])) {
-            const int action = model->anmdata[0x62] ? 0x62 : 0x22;
+            const int action = rider_action >= 0 && model->anmdata[rider_action] ? rider_action :
+                               (model->anmdata[0x62] ? 0x62 : 0x22);
             ResetAnimPacket(&rider, action);
             anim = &rider;
         }
+    }
+    if (coco && VEHICLECONTROL == 1 && obj->vehicle == 0x89 && base_world && world) {
+        nw_coco_sample_grips(0x89, attachment_anim, base_world, world, 0);
+    }
+    if (coco && player->target && VEHICLECONTROL == 0 && anim && world) {
+        nw_coco_rider_recoil = nw_coco_body_recoil(world);
+        struct numtx_s gun_world = *world;
+        const int roll = nw_coco_bazooka_world(&gun_world);
+        AnimPacket gun_anim = *attachment_anim;
+        nw_coco_bazooka_shot_pose(&gun_anim);
+        nw_coco_sample_grips(0x8c, &gun_anim, &gun_world, world, roll);
+        ResetAnimPacket(&rider, 0x22);
+        anim = &rider;
+    }
+    if (coco && VEHICLECONTROL == 0 && !player->target && anim &&
+        model->anmdata[0x22]) {
+        const unsigned current = anim->action;
+        const unsigned source = anim->blend_src_action, dest = anim->blend_dst_action;
+        const bool valid_current = current < 0x76 && model->anmdata[current];
+        const bool valid_dest = dest < 0x76 && model->anmdata[dest];
+        const bool valid_blend = anim->blend_frames && source < 0x76 &&
+            model->anmdata[source] && valid_dest;
+        if ((anim->blend && !valid_blend) || (!anim->blend && !valid_current)) {
+            ResetAnimPacket(&rider, anim->blend && valid_dest ? dest :
+                                   valid_current ? current : 0x22);
+            if (anim->blend && valid_dest) rider.anim_time = anim->blend_dst_time;
+            else if (valid_current) rider.anim_time = anim->anim_time;
+            anim = &rider;
+        }
+    }
+    if (player && obj == &player->obj && obj->character == 1 &&
+        model->character == 0x8c && player->target && world) {
+        seat = *world;
+        const int roll = nw_coco_bazooka_world(&seat);
+        if (anim) {
+            rider = *anim;
+            nw_coco_bazooka_shot_pose(&rider);
+            anim = &rider;
+        }
+        if (roll) nw_coco_sample_grips(0x8c, anim, &seat, NULL, roll);
+        world = &seat;
     }
     nw_coco_pose_active = coco;
     const s32 drawn = DrawCharacterModel__retail(model, anim, world, shadow, render, reflection,
@@ -928,7 +1147,7 @@ static void nw_coco_plane_legs(const struct NUHGOBJ_s *body, struct numtx_s *pos
             goal.z = reference[pedal]._32 + nw_coco_biplane_back;
         }
         const struct nuvec_s pole = {0.0f, 0.55f, -1.0f};
-        nw_pilot_place_limb(body, pose, hip, knee, foot, goal, pole);
+        nw_pilot_place_limb(body, pose, hip, knee, foot, goal, pole, false);
     }
 }
 
@@ -942,7 +1161,7 @@ static void nw_coco_point_feet(const struct NUHGOBJ_s *body, struct numtx_s *pos
         const int toe = nw_coco_find_joint(body, toes[side]);
         if (foot < 0 || toe < 0) continue;
         const struct nuvec_s current = nw_pilot_direction(&pose[foot], &pose[toe]);
-        nw_pilot_aim(body, pose, foot, current, direction);
+        nw_pilot_aim(body, pose, foot, current, direction, false);
     }
 }
 
@@ -985,30 +1204,225 @@ static void nw_coco_hang_spin(struct NUHGOBJ_s *body, struct numtx_s *pose)
     }
 }
 
-bool nw_coco_player_eyes_closed(void)
+bool nw_coco_player_dying(void)
 {
     return player && player->obj.character == 1 && player->obj.dead != 0;
 }
 
-bool nw_coco_body_eyes_closed(void)
+bool nw_coco_player_eyes_closed(void)
 {
-    return nw_drawing_player && nw_coco_player_eyes_closed();
+    return nw_coco_player_dying() && player->obj.die_time >= 0.999f;
+}
+
+bool nw_coco_body_eye_control(void)
+{
+    return nw_drawing_player && player && player->obj.character == 1;
+}
+
+bool nw_coco_body_aiming(void)
+{
+    return nw_coco_pose_active && VEHICLECONTROL == 0 && player->target && !player->obj.dead;
+}
+
+static void nw_coco_handcar_pose(struct NUHGOBJ_s *body, struct numtx_s *pose)
+{
+    const int root = nw_coco_find_joint(body, "Coco");
+    const int shoulders = nw_coco_find_joint(body, "shoulders");
+    if (root < 0 || shoulders < 0) return;
+    const int jump_frames = player->jump_frames;
+    const float jump = player->jump && jump_frames > 0 && player->jump_frame < jump_frames
+        ? NuTrigTable[(u16)(32768 * player->jump_frame / jump_frames)] : 0.0f;
+
+    const float grip_y = 0.5f * (nw_coco_grips[0].y + nw_coco_grips[1].y);
+    const float squat = (1.0f - jump) * SDL_clamp((pose[shoulders]._31 - grip_y) / 0.23f, 0.0f, 1.0f);
+    for (int i = 0; i < body->num_joints; ++i) {
+        pose[i]._31 -= 0.047f * squat;
+    }
+    static const char *const toes[] = {"leftBall", "rightBall"};
+    static const char *const feet[] = {"leftFoot", "rightFoot"};
+    for (int side = 0; side < 2; ++side) {
+        const int foot = nw_coco_find_joint(body, feet[side]);
+        if (foot < 0) continue;
+        const int knee = body->joints[foot].parent_ix;
+        if (knee < 0 || knee >= foot) continue;
+        const int hip = body->joints[knee].parent_ix;
+        if (hip < 0 || hip >= knee) continue;
+        const struct nuvec_s ankle = {pose[foot]._30 + (side ? -0.035f : 0.035f),
+            pose[foot]._31 + 0.047f * squat + 0.035f + 0.10f * jump,
+            pose[foot]._32 + 0.025f + 0.06f * jump};
+        const int toe = nw_coco_find_joint(body, toes[side]);
+        const struct numtx_s shoe = pose[foot];
+        struct numtx_s toe_pose;
+        if (toe >= 0) toe_pose = pose[toe];
+        nw_pilot_place_limb(body, pose, hip, knee, foot, ankle,
+                            (struct nuvec_s){0.0f, 0.0f, -1.0f}, false);
+        if (jump == 0.0f) {
+            /* Keep the idle foot orientation while standing on the deck. */
+            const struct nuvec_s shift = nw_pilot_direction(&shoe, &pose[foot]);
+            pose[foot] = shoe;
+            pose[foot]._30 += shift.x;
+            pose[foot]._31 += shift.y;
+            pose[foot]._32 += shift.z;
+            if (toe >= 0) {
+                pose[toe] = toe_pose;
+                pose[toe]._30 += shift.x;
+                pose[toe]._31 += shift.y;
+                pose[toe]._32 += shift.z;
+            }
+        }
+    }
+
+    if (jump > 0.0f) {
+        struct numtx_s kick;
+        NuMtxSetRotationX(&kick, (int)(-32300.0f * jump));
+        nw_rotate_hang_chain(body, pose, root, &kick);
+        const float x = 0.5f * (nw_coco_grips[0].x + nw_coco_grips[1].x) - pose[shoulders]._30;
+        const float y = 0.5f * (nw_coco_grips[0].y + nw_coco_grips[1].y) + 0.169f - pose[shoulders]._31;
+        const float z = 0.5f * (nw_coco_grips[0].z + nw_coco_grips[1].z) + 0.018f - pose[shoulders]._32;
+        for (int i = 0; i < body->num_joints; ++i) {
+            pose[i]._30 += x * jump;
+            pose[i]._31 += y * jump;
+            pose[i]._32 += z * jump;
+        }
+    }
+    nw_coco_pose_hair(body, pose, jump);
+}
+
+static void nw_coco_bazooka_pose(struct NUHGOBJ_s *body, struct numtx_s *pose)
+{
+    const int shoulders = nw_coco_find_joint(body, "shoulders");
+    const int face = nw_coco_find_joint(body, "face");
+    if (shoulders < 0 || face < 0) return;
+    struct numtx_s rotation;
+    const int yaw = (s16)player->obj.target_yrot;
+    const int pitch = (s16)player->obj.target_xrot;
+    NuMtxSetRotationY(&rotation, yaw / 2);
+    nw_rotate_hang_chain(body, pose, shoulders, &rotation);
+    NuMtxSetRotationY(&rotation, yaw - yaw / 2);
+    NuMtxRotateX(&rotation, pitch * 3 / 4);
+    nw_rotate_hang_chain(body, pose, face, &rotation);
+
+    const int back = nw_coco_find_joint(body, "back");
+    for (int i = shoulders; i < body->num_joints; ++i) {
+        int joint = i;
+        while (joint > shoulders) joint = body->joints[joint].parent_ix;
+        if (joint != shoulders) continue;
+        pose[i]._30 += nw_coco_rider_recoil.x;
+        pose[i]._31 += nw_coco_rider_recoil.y;
+        pose[i]._32 += nw_coco_rider_recoil.z;
+    }
+    if (back >= 0) {
+        pose[back]._30 += 0.4f * nw_coco_rider_recoil.x;
+        pose[back]._31 += 0.4f * nw_coco_rider_recoil.y;
+        pose[back]._32 += 0.4f * nw_coco_rider_recoil.z;
+    }
 }
 
 struct numtx_s *nw_coco_render_pose(struct NUHGOBJ_s *body, struct numtx_s *pose,
-                                    struct numtx_s *adjusted)
+                                    struct numtx_s *adjusted, struct numtx_s *before_pump,
+                                    bool *has_before_pump)
 {
+    *has_before_pump = false;
     if (!nw_coco_pose_active || !body->joints || body != player->obj.model->obj || !pose) {
         return pose;
+    }
+    if ((VEHICLECONTROL == 1 && player->obj.vehicle == 0x89) ||
+        (VEHICLECONTROL == 0 && (player->target || player->tiptoe))) {
+        memcpy(adjusted, pose, body->num_joints * sizeof(*pose));
+        const bool handcar = VEHICLECONTROL == 1;
+        const bool aiming = !handcar && player->target;
+        if (handcar || aiming) {
+            if (!nw_coco_grips_valid) return pose;
+            if (handcar) {
+                nw_coco_handcar_pose(body, adjusted);
+                memcpy(before_pump, adjusted, body->num_joints * sizeof(*adjusted));
+                *has_before_pump = true;
+            } else {
+                nw_coco_bazooka_pose(body, adjusted);
+                nw_coco_pose_hair(body, adjusted, 0.0f);
+            }
+            static const char *const wrists[] = {"leftWrist", "rightWrist"};
+            for (int side = aiming ? 1 : 0; side < 2; ++side) {
+                const int wrist = nw_coco_find_joint(body, wrists[side]);
+                if (wrist < 0) continue;
+                const int elbow = body->joints[wrist].parent_ix;
+                if (elbow < 0 || elbow >= wrist) continue;
+                const int arm = body->joints[elbow].parent_ix;
+                if (arm < 0 || arm >= elbow) continue;
+                nw_pilot_place_limb(body, adjusted, arm, elbow, wrist, nw_coco_grips[side],
+                                    (struct nuvec_s){side ? -1.0f : 1.0f, -0.45f, aiming ? -0.85f : -0.40f}, handcar);
+            }
+        } else {
+            const int back = nw_coco_find_joint(body, "back");
+            if (back >= 0) {
+                struct numtx_s rotation;
+                NuMtxSetRotationX(&rotation, -3400);
+                nw_rotate_hang_chain(body, adjusted, back, &rotation);
+            }
+            /* Use Coco's loading-screen fall to animate the balancing reach. */
+            const struct nuanimdata_s *clip = nw_coco_loading_fall;
+            struct numtx_s fall[COCO_HANG_MAX_JOINTS];
+            struct numtx_s neutral[COCO_HANG_MAX_JOINTS];
+            const bool sample_fall = clip && clip->time > 1.0f;
+            if (sample_fall) {
+                const float cycle = clip->time - 1.0f;
+                const float time = 1.0f + fmodf(GameTimer.frame * 0.38f, cycle);
+                NuHGobjEvalAnim(body, nw_coco_loading_fall, time, 0, NULL, fall);
+                NuHGobjEvalAnim(body, nw_coco_loading_fall, 1.0f, 0, NULL, neutral);
+            }
+            const float sway = NuTrigTable[(u16)(GameTimer.frame * 620u)];
+            static const char *const hands[] = {"leftWrist", "rightWrist"};
+            for (int side = 0; side < 2; ++side) {
+                const int wrist = nw_coco_find_joint(body, hands[side]);
+                if (wrist < 0) continue;
+                const int elbow = body->joints[wrist].parent_ix;
+                if (elbow < 0 || elbow >= wrist) continue;
+                const int arm = body->joints[elbow].parent_ix;
+                if (arm < 0 || arm >= elbow) continue;
+                const struct nuvec_s upper = nw_pilot_direction(&adjusted[arm], &adjusted[elbow]);
+                const struct nuvec_s lower = nw_pilot_direction(&adjusted[elbow], &adjusted[wrist]);
+                const float reach = sqrtf(nw_pilot_dot(upper, upper)) + sqrtf(nw_pilot_dot(lower, lower));
+                struct nuvec_s balance = {
+                    adjusted[arm]._30 + reach * (side ? -0.86f : 0.86f),
+                    adjusted[arm]._31 - reach * (side ? 0.34f : 0.15f) +
+                        reach * 0.10f * (side ? sway : -sway),
+                    adjusted[arm]._32 + reach * 0.18f,
+                };
+                if (sample_fall) {
+                    const struct nuvec_s motion = nw_pilot_direction(&fall[arm], &fall[wrist]);
+                    const struct nuvec_s rest = nw_pilot_direction(&neutral[arm], &neutral[wrist]);
+                    balance.y += SDL_clamp(0.65f * (motion.y - rest.y), -0.26f * reach, 0.26f * reach);
+                    balance.z += SDL_clamp(0.65f * (motion.z - rest.z), -0.24f * reach, 0.24f * reach);
+                }
+                nw_pilot_place_limb(body, adjusted, arm, elbow, wrist, balance,
+                                    (struct nuvec_s){0.0f, -1.0f, 0.0f}, true);
+            }
+            nw_coco_pose_hair(body, adjusted, 0.0f);
+            static const char *const feet[] = {"leftFoot", "rightFoot"};
+            static const char *const toes[] = {"leftBall", "rightBall"};
+            for (int side = 0; side < 2; ++side) {
+                const int foot = nw_coco_find_joint(body, feet[side]);
+                const int toe = nw_coco_find_joint(body, toes[side]);
+                if (foot < 0 || toe < 0) continue;
+                const struct nuvec_s forward = nw_pilot_direction(&adjusted[foot], &adjusted[toe]);
+                const float horizontal = sqrtf(forward.x * forward.x + forward.z * forward.z);
+                if (horizontal < 0.001f) continue;
+                nw_pilot_aim(body, adjusted, foot, forward,
+                    (struct nuvec_s){forward.x, -horizontal * 1.55f, forward.z}, false);
+            }
+        }
+        return adjusted;
     }
     if (nw_coco_plane_pose) {
         memcpy(adjusted, pose, body->num_joints * sizeof(*pose));
         nw_coco_plane_legs(body, adjusted);
+        nw_coco_pose_hair(body, adjusted, 0.0f);
         return adjusted;
     }
     if (nw_mech_pilot) {
         memcpy(adjusted, pose, body->num_joints * sizeof(*pose));
         nw_pose_mech_pilot(body, adjusted, nw_mech_pilot);
+        nw_coco_pose_hair(body, adjusted, 0.0f);
         return adjusted;
     } else if (VEHICLECONTROL == 1 && player->obj.vehicle == 0x53 &&
                player->obj.anim.newaction == 0x3a) {
@@ -1019,11 +1433,11 @@ struct numtx_s *nw_coco_render_pose(struct NUHGOBJ_s *body, struct numtx_s *pose
             const float amount = SDL_clamp(player->obj.xz_distance / 0.065f, 0.0f, 1.0f);
             NuMtxSetRotationX(&lean, (s32)(-2900.0f * amount));
             nw_rotate_hang_chain(body, adjusted, back, &lean);
+            nw_coco_pose_hair(body, adjusted, 0.0f);
             return adjusted;
         }
     } else if (player->obj.dangle) {
         memcpy(adjusted, pose, body->num_joints * sizeof(*pose));
-        nw_coco_hang_hair(body, adjusted);
         if (!player->spin && player->obj.xz_distance > 0.001f) {
             const float sway = NuTrigTable[(u16)(GameTimer.frame * 1800u)];
             for (int i = 0; i < body->num_joints; ++i) {
@@ -1043,12 +1457,19 @@ struct numtx_s *nw_coco_render_pose(struct NUHGOBJ_s *body, struct numtx_s *pose
         nw_coco_hang_arm(body, adjusted, "leftArm", "leftWrist", 0);
         nw_coco_hang_arm(body, adjusted, "rightArm", "rightWrist", 0x8000);
         nw_coco_hang_spin(body, adjusted);
+        nw_coco_pose_hair(body, adjusted, 0.0f);
         return adjusted;
     } else if (VEHICLECONTROL == 0 && player->obj.ground && !player->slide &&
                !player->spin && (player->crawl || player->crouch_pos) &&
                CocoMoveInfo.CROUCHINGFRAMES > 0) {
         NuHGobjEval(body, 0, NULL, adjusted);
         nw_coco_crouch_pose(body, adjusted);
+        nw_coco_pose_hair(body, adjusted, 0.0f);
+        return adjusted;
+    }
+    if (VEHICLECONTROL == 1) {
+        memcpy(adjusted, pose, body->num_joints * sizeof(*pose));
+        nw_coco_pose_hair(body, adjusted, 0.0f);
         return adjusted;
     }
     return pose;

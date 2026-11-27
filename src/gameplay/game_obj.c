@@ -2,6 +2,7 @@
 #include "game/game_obj.retail.h"
 #include "numath/nuvec.h"
 #include "gameplay/air.h"
+#include "gameplay/character_select.h"
 #include "gameplay/crash.h"
 #include "gameplay/ground.h"
 #include "gameplay/hazards.h"
@@ -54,7 +55,11 @@ void PlayerCreatureCollisions(struct obj_s *obj)
 {
     nw_hazards_shrink(obj);
     nw_sub_shrink();
+    struct creature_s *npc = player && obj == &player->obj ? nw_character_hub_npc() : NULL;
+    const bool was_solid = npc && (npc->obj.flags & 4);
+    if (was_solid) npc->obj.flags &= ~4u;
     PlayerCreatureCollisions__retail(obj);
+    if (was_solid) npc->obj.flags |= 4u;
     nw_sub_restore();
     nw_hazards_restore();
     nw_hubgem_collide(obj);

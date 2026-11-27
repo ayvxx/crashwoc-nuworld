@@ -3,6 +3,10 @@
 
 struct creature_s;
 struct nupad_s;
+struct nuanimdata_s;
+
+extern struct nuanimdata_s *nw_coco_loading_fall;
+struct creature_s *nw_character_hub_npc(void);
 
 void nw_character_select_load_choice(const char *root);
 struct nupad_s *nw_character_select_pad(struct creature_s *creature, struct nupad_s *pad);

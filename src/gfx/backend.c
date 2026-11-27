@@ -648,6 +648,7 @@ static NwVuMaterial nw_be_material(const NwPacket *p, const NwCmd *c, bool uvrow
         m.uvoff[3] = uvrow ? (float)s->row[1] : 0.0f;
         m.tex = s->surf.addr ? nw_be_surf_tex(&s->surf, s->surf.tcc) : s->tex ? &s->tex->gl : NULL;
         m.state = s->gs;
+        if (c->texture_override) m.tex = &c->texture_override->gl;
     }
     return m;
 }

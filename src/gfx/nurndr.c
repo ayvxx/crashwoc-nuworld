@@ -12,12 +12,14 @@
 #include "gfx/rndr.h"
 #include "nu3d/nucamera.h"
 #include "nu3d/nugobj.h"
+#include "nu3d/nugscn.h"
 #include "nu3d/nuhgobj.h"
 #include "nu3d/numtl.h"
 #include "nu3d/nurndr.h"
 #include "nu3d/nustream.h"
 #include "gamelib/debris.h"
 #include "nu3d/nutex.h"
+#include "nu3d/nutexanm.h"
 #include "nu3d/nuvport.h"
 #include "numath/numtx.h"
 #include "platform/log.h"
@@ -633,7 +635,8 @@ static float nw_rndr_radius(const struct nuvec_s *min, const struct nuvec_s *max
 }
 
 /* Returns retail's clip state: 0 out of view, 1 in view, 2 partly. */
-int NuRndrGScnObj(struct nugobj_s *gobj, struct numtx_s *wm)
+static int nw_render_scene_object(struct nugobj_s *gobj, struct numtx_s *wm,
+                                  int eye, const NwGpuTex *lid)
 {
     struct numtx_s mtx;
     struct numtx_s offset;
@@ -674,6 +677,7 @@ int NuRndrGScnObj(struct nugobj_s *gobj, struct numtx_s *wm)
                     } else if (geom->dmastream) {
                         NwCmd *c = nw_rndr_cmd(rndrstream_3d, NW_CMD_DRAW);
                         c->mesh = geom->dmastream;
+                        if (lid && mtl->tid == eye) c->texture_override = lid;
                     }
                 }
             }
@@ -693,7 +697,24 @@ int NuRndrGScnObj(struct nugobj_s *gobj, struct numtx_s *wm)
     return clip;
 }
 
+int NuRndrGScnObj(struct nugobj_s *gobj, struct numtx_s *wm)
+{
+    return nw_render_scene_object(gobj, wm, 0, NULL);
+}
+
+
 /* As NuRndrGScnObj but along next_gobj, never through the ordering table, no forced material table under one. */
+static const struct nutexanim_s *nw_body_eye_tracks[2];
+static const NwGpuTex *nw_body_eye_textures[2];
+
+static const NwGpuTex *nw_coco_body_eye(const struct numtl_s *material)
+{
+    for (int i = 0; i < 2; ++i) {
+        if (nw_body_eye_tracks[i] && material == nw_body_eye_tracks[i]->mtl) return nw_body_eye_textures[i];
+    }
+    return NULL;
+}
+
 int NuRndrGobj(struct nugobj_s *gobj, struct numtx_s *wm)
 {
     struct numtx_s mtx;
@@ -732,7 +753,9 @@ int NuRndrGobj(struct nugobj_s *gobj, struct numtx_s *wm)
             for (uint32_t pass = 0; mtl && geom->dmastream; mtl = mtl->next, pass++) {
                 nw_interp_at(link, g, pass);
                 rndrstream_3d = &mtl->rs;
-                nw_rndr_cmd(rndrstream_3d, NW_CMD_DRAW)->mesh = geom->dmastream;
+                NwCmd *draw = nw_rndr_cmd(rndrstream_3d, NW_CMD_DRAW);
+                draw->mesh = geom->dmastream;
+                draw->texture_override = nw_coco_body_eye(mtl);
             }
         }
         g = 0x10000;
@@ -769,7 +792,9 @@ int NuRndrGobjSkin(struct nugobj_s *gobj, struct numtx_s *wm, int njoints, struc
         for (uint32_t pass = 0; mtl && geom->skindma; mtl = mtl->next, pass++) {
             nw_interp_at(g, pass, 0);
             rndrstream_3d = &mtl->rs;
-            nw_rndr_cmd(rndrstream_3d, NW_CMD_SKIN)->skin = (const NwGpuSkin *)geom->skindma;
+            NwCmd *draw = nw_rndr_cmd(rndrstream_3d, NW_CMD_SKIN);
+            draw->skin = (const NwGpuSkin *)geom->skindma;
+            draw->texture_override = nw_coco_body_eye(mtl);
         }
     }
     nw_interp_end(scope);
@@ -779,7 +804,8 @@ int NuRndrGobjSkin(struct nugobj_s *gobj, struct numtx_s *wm, int njoints, struc
 /* Skin palette is INV_WT x mtx_array, dwa[ix] the layer's weights; hgobj_enabled is 1 in retail, nothing clears it. */
 bool nw_coco_swim_render(struct NUHGOBJ_s *model, struct numtx_s *world, int *drawn);
 struct numtx_s *nw_coco_render_pose(struct NUHGOBJ_s *body, struct numtx_s *pose,
-                                    struct numtx_s *adjusted);
+                                    struct numtx_s *adjusted, struct numtx_s *before_pump,
+                                    bool *has_before_pump);
 
 struct NwCocoVertex {
     float pos[3], uv[2], weight[3];
@@ -790,7 +816,7 @@ enum { NW_COCO_ATLAS_SIZE = 512, NW_COCO_POSES = 4, NW_COCO_JOINTS = 55 };
 static const struct NwCocoVertex *nw_coco_vertices;
 static const uint32_t *nw_coco_head;
 static uint32_t nw_coco_vertex_count, nw_coco_head_count;
-static struct numtl_s *nw_coco_materials[NW_COCO_POSES];
+static struct numtl_s *nw_coco_materials[NW_COCO_POSES + 1];
 static struct nuvec_s nw_coco_head_min, nw_coco_head_max;
 
 static bool nw_load_coco_model(void)
@@ -859,7 +885,26 @@ static void nw_coco_create_materials(void)
     if (nw_coco_materials[0]) return;
     uint8_t *texture = (void *)(nw_coco_head + nw_coco_head_count);
     const size_t atlas_bytes = NW_COCO_ATLAS_SIZE * NW_COCO_ATLAS_SIZE * 3;
-    for (int i = 0; i < NW_COCO_POSES; ++i) {
+    uint8_t *aim_texture = SDL_malloc(atlas_bytes);
+    if (aim_texture) {
+        memcpy(aim_texture, texture, atlas_bytes);
+        const uint8_t *closed = texture + (NW_COCO_POSES - 1) * atlas_bytes;
+        /* The atlas packs each left-eye triangle into a separate 16-pixel tile. */
+        static const uint16_t tiles[][2] = {
+            {272,224}, {288,224}, {304,224},
+            {208,272}, {224,272}, {240,272}, {256,272},
+            {272,272}, {288,272}, {304,272},
+            {224,288}, {240,288}, {256,288},
+        };
+        for (size_t i = 0; i < SDL_arraysize(tiles); ++i) {
+            for (unsigned y = 0; y < 16; ++y) {
+                const size_t offset = ((tiles[i][1] + y) * NW_COCO_ATLAS_SIZE + tiles[i][0]) * 3;
+                memcpy(aim_texture + offset, closed + offset, 16 * 3);
+            }
+        }
+    }
+    for (int i = 0; i < NW_COCO_POSES + (aim_texture != NULL); ++i) {
+        if (i == NW_COCO_POSES) texture = aim_texture;
         struct nutex_s spec = {2, NW_COCO_ATLAS_SIZE, NW_COCO_ATLAS_SIZE, 1, texture, NULL};
         struct numtl_s *mtl = NuMtlCreate(1);
         mtl->diffuse.r = mtl->diffuse.g = mtl->diffuse.b = 1.0f;
@@ -872,15 +917,19 @@ static void nw_coco_create_materials(void)
         NuMtlInsert(mtl);
         NuMtlUpdate(mtl);
         nw_coco_materials[i] = mtl;
-        texture += atlas_bytes;
+        if (i < NW_COCO_POSES) texture += atlas_bytes;
     }
+    SDL_free(aim_texture);
 }
 
 bool nw_coco_player_eyes_closed(void);
-bool nw_coco_body_eyes_closed(void);
+bool nw_coco_player_dying(void);
+bool nw_coco_body_eye_control(void);
+bool nw_coco_body_aiming(void);
 
-static struct numtl_s *nw_coco_blink_material(bool closed)
+static unsigned nw_coco_blink_pose(bool closed)
 {
+    if (nw_coco_player_dying()) return closed ? 3 : 0;
     extern struct gtimer_s GameTimer;
     /* Two simulation ticks per Vita animation frame. Share the pose with the portrait. */
     const uint32_t frame = GameTimer.frame / 2;
@@ -892,14 +941,22 @@ static struct numtl_s *nw_coco_blink_material(bool closed)
     unsigned phase = frame % 120 - start;
     if ((pattern >> 8) % 3 == 0 && phase >= 12) phase -= 12;
     const unsigned blink = phase < 2 ? phase + 1 : phase < 4 ? 3 : phase < 6 ? 6 - phase : 0;
-    nw_coco_create_materials();
-    return nw_coco_materials[closed ? 3 : blink];
+    return blink;
 }
 
-static NwVuSpriteVertex *nw_coco_model_stream(struct numtx_s *world, uint32_t count, bool closed)
+static struct numtl_s *nw_coco_blink_material(bool closed, bool aiming)
+{
+    nw_coco_create_materials();
+    if (!closed && aiming) {
+        return nw_coco_materials[NW_COCO_POSES] ? nw_coco_materials[NW_COCO_POSES] : nw_coco_materials[0];
+    }
+    return nw_coco_materials[nw_coco_blink_pose(closed)];
+}
+
+static NwVuSpriteVertex *nw_coco_model_stream(struct numtx_s *world, uint32_t count, bool closed, bool aiming)
 {
     static const NwVuProg textured = {.name = "vu_load_tricu_mpg"};
-    struct numtl_s *mtl = nw_coco_blink_material(closed);
+    struct numtl_s *mtl = nw_coco_blink_material(closed, aiming);
     NwVuSpriteVertex *out;
     NuRndrSetLocalMtx(world, 2);
     NuRndrStreamAddMtl(&mtl->rs, mtl);
@@ -916,22 +973,31 @@ static NwVuSpriteVertex nw_coco_model_vertex(const struct NwCocoVertex *in, stru
     };
 }
 
-static bool nw_draw_coco_model(struct NUHGOBJ_s *body, struct numtx_s *world, struct numtx_s *pose)
+static bool nw_draw_coco_model(struct NUHGOBJ_s *body, struct numtx_s *world, struct numtx_s *pose,
+                               struct numtx_s *before_pump)
 {
     if (!pose || CRemap[1] < 0 || CModel[CRemap[1]].obj != body ||
         body->num_joints != NW_COCO_JOINTS || !nw_load_coco_model()) return false;
 
     struct numtx_s palette[NW_COCO_JOINTS];
     NuMtxMulArrayVU0(palette, body->INV_WT, pose, NW_COCO_JOINTS);
-    NwVuSpriteVertex *out = nw_coco_model_stream(world, nw_coco_vertex_count, nw_coco_body_eyes_closed());
+    struct numtx_s before_pump_palette[NW_COCO_JOINTS];
+    if (before_pump) NuMtxMulArrayVU0(before_pump_palette, body->INV_WT, before_pump, NW_COCO_JOINTS);
+    NwVuSpriteVertex *out = nw_coco_model_stream(world, nw_coco_vertex_count,
+        nw_coco_body_eye_control() && nw_coco_player_eyes_closed(), nw_coco_body_aiming());
     for (uint32_t i = 0; i < nw_coco_vertex_count; ++i) {
         const struct NwCocoVertex *in = &nw_coco_vertices[i];
         struct nuvec_s src = {in->pos[0], in->pos[1], in->pos[2]};
         struct nuvec_s pos = {0};
+        /* All copies of the arm-weighted vertices in the two side curls. */
+        const bool curl = i == 16 || i == 18 || i == 20 || i == 21 || i == 22 ||
+            i == 25 || i == 29 || i == 35 || i == 37 || i == 39 ||
+            i == 41 || i == 42 || i == 43 || i == 46 || i == 50;
+        struct numtx_s *skin = before_pump && curl ? before_pump_palette : palette;
         for (int j = 0; j < 3; ++j) {
             if (!in->weight[j]) continue;
             struct nuvec_s point;
-            NuVecMtxTransform(&point, &src, &palette[in->joint[j]]);
+            NuVecMtxTransform(&point, &src, &skin[in->joint[j]]);
             pos.x += point.x * in->weight[j];
             pos.y += point.y * in->weight[j];
             pos.z += point.z * in->weight[j];
@@ -941,9 +1007,62 @@ static bool nw_draw_coco_model(struct NUHGOBJ_s *body, struct numtx_s *world, st
     return true;
 }
 
-int nw_draw_coco_lives_head(struct nugobj_s *stock, struct numtx_s *world)
+/* Both base eye tracks share the same closed artwork. Remove its baked glint
+ * without changing the alpha, crease, or shadows on the eyelid. */
+static const NwGpuTex *nw_coco_native_eye(const struct nutexanim_s *eye, unsigned phase)
 {
-    if (!nw_load_coco_model()) return NuRndrGScnObj(stock, world);
+    const NwGpuTex *texture = nw_rndr_texture(eye->tids[phase]);
+    enum { size = 32 };
+    if (!texture || phase != 3 ||
+        texture->tex.levels[0].width != size || texture->tex.levels[0].height != size) return texture;
+    static int matte_tid;
+    if (!nw_rndr_texture(matte_tid)) {
+        uint8_t pixels[size * size * 4], row[size * 4];
+        nw_tex_rgba(&texture->tex, 16, row);
+        const uint8_t green = row[15 * 4 + 1], blue = row[15 * 4 + 2];
+        for (int y = 0; y < size; ++y) {
+            nw_tex_rgba(&texture->tex, y, row);
+            for (int x = 0; x < size; ++x) {
+                const uint8_t *in = &row[4 * x];
+                uint8_t *out = &pixels[4 * (y * size + x)];
+                const bool glint = x >= 17 && x <= 28 && y >= 9 && y <= 21;
+                out[0] = in[3];
+                out[1] = glint ? SDL_min(in[2], blue) : in[2];
+                out[2] = glint ? SDL_min(in[1], green) : in[1];
+                out[3] = in[0];
+            }
+        }
+        struct nutex_s spec = {3, size, size, 1, pixels, NULL};
+        matte_tid = NuTexCreate(&spec);
+    }
+    const NwGpuTex *matte = nw_rndr_texture(matte_tid);
+    return matte ? matte : texture;
+}
+
+static const struct nutexanim_s *nw_coco_eye_track(const struct NUHGOBJ_s *body, const char *name)
+{
+    if (!body) return NULL;
+    for (int i = 0; i < body->numtexanims; ++i) {
+        const struct nutexanim_s *eye = &body->texanims[i];
+        if (eye->numtids == 5 && eye->scriptname &&
+            SDL_strcasecmp(eye->scriptname, name) == 0) return eye;
+    }
+    return NULL;
+}
+
+int nw_draw_coco_lives_head(struct nugscn_s *scene, struct nugobj_s *stock, struct numtx_s *world)
+{
+    if (!nw_load_coco_model()) {
+        const unsigned phase = nw_coco_blink_pose(nw_coco_player_eyes_closed());
+        const struct nutexanim_s *eye = phase && CRemap[1] >= 0 ?
+            nw_coco_eye_track(CModel[CRemap[1]].obj, "leftEyeC") : NULL;
+        const NwGpuTex *lid = eye ? nw_coco_native_eye(eye, phase) : NULL;
+        const int eye_slot = 9; /* WUMPA.GSC portrait white-eye texture */
+        if (lid && scene->numtid > eye_slot) {
+            return nw_render_scene_object(stock, world, scene->tids[eye_slot], lid);
+        }
+        return NuRndrGScnObj(stock, world);
+    }
     const struct nuvec_s min = nw_coco_head_min, max = nw_coco_head_max;
     const float scale = (stock->max.y - stock->min.y) / (max.y - min.y);
     const struct nuvec_s shift = {
@@ -951,7 +1070,7 @@ int nw_draw_coco_lives_head(struct nugobj_s *stock, struct numtx_s *world)
         (stock->min.y + stock->max.y - (min.y + max.y) * scale) * 0.5f,
         (stock->min.z + stock->max.z - (min.z + max.z) * scale) * 0.5f,
     };
-    NwVuSpriteVertex *out = nw_coco_model_stream(world, nw_coco_head_count, nw_coco_player_eyes_closed());
+    NwVuSpriteVertex *out = nw_coco_model_stream(world, nw_coco_head_count, nw_coco_player_eyes_closed(), false);
     for (uint32_t i = 0; i < nw_coco_head_count; ++i) {
         const struct NwCocoVertex *in = &nw_coco_vertices[nw_coco_head[i]];
         out[i] = nw_coco_model_vertex(in, (struct nuvec_s){
@@ -992,7 +1111,9 @@ int NuHGobjRndrMtxDwa(struct NUHGOBJ_s *hobj, struct numtx_s *wm, int nlayers, s
         return coco_drawn;
     }
     struct numtx_s adjusted[256];
-    mtx_array = nw_coco_render_pose(hobj, mtx_array, adjusted);
+    struct numtx_s before_pump[256];
+    bool has_before_pump;
+    mtx_array = nw_coco_render_pose(hobj, mtx_array, adjusted, before_pump, &has_before_pump);
     struct numtx_s mtx;
     int rv = 0;
     NwInterpScope scope = nw_interp_begin(wm, hobj, wm, nw_rndr_radius(&hobj->bbox_min, &hobj->bbox_max));
@@ -1020,10 +1141,21 @@ int NuHGobjRndrMtxDwa(struct NUHGOBJ_s *hobj, struct numtx_s *wm, int nlayers, s
             }
         }
     }
-    if (nw_draw_coco_model(hobj, wm, mtx_array)) {
+    if (nw_draw_coco_model(hobj, wm, mtx_array, has_before_pump ? before_pump : NULL)) {
         nw_rndr_model_end();
         nw_interp_end(scope);
         return vis;
+    }
+    if (nw_coco_body_eye_control() && CRemap[1] >= 0 && CModel[CRemap[1]].obj == hobj) {
+        const unsigned phase = nw_coco_blink_pose(nw_coco_player_eyes_closed());
+        const char *names[] = {"leftEyeC", "rghtEyeC"};
+        for (int i = 0; i < 2; ++i) {
+            const struct nutexanim_s *eye = nw_coco_eye_track(hobj, names[i]);
+            if (eye) {
+                nw_body_eye_tracks[i] = eye;
+                nw_body_eye_textures[i] = nw_coco_native_eye(eye, phase);
+            }
+        }
     }
     for (int i = 0; i < nlayers; i++) {
         int ix = 0;
@@ -1063,6 +1195,7 @@ int NuHGobjRndrMtxDwa(struct NUHGOBJ_s *hobj, struct numtx_s *wm, int nlayers, s
             }
         }
     }
+    memset(nw_body_eye_tracks, 0, sizeof(nw_body_eye_tracks));
     nw_rndr_model_end();
     nw_interp_end(scope);
     return rv;

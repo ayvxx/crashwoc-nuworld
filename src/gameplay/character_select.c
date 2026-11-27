@@ -9,13 +9,14 @@
 #include "platform/log.h"
 #include "shim/shim.h"
 
-extern struct gtimer_s GameTimer;
+extern struct cursor_s Cursor;
+extern struct cammtx_s *pCam;
+extern f32 PANEL3DMULX, PANEL3DMULY;
 extern s32 Paused;
-extern s32 stick_bits, stick_bits_db;
 void Text3D(char *, float, float, float, float, float, float, s32, s32);
 void GameSfx(s32, struct nuvec_s *);
 
-enum { NW_MENU_MOVE_SOUND = 0x18, NW_MENU_CONFIRM_SOUND = 0x36 };
+enum { NW_CRASH_SPIN_SOUND = 0x13, NW_COCO_SPIN_SOUND = 0x1a };
 
 extern struct ldata_s *LDATA;
 extern s32 Level, Demo, cutmovie, VEHICLECONTROL, LEVELAICOUNT;
@@ -42,9 +43,8 @@ static struct ldata_s *nw_overridden_level;
 static short nw_original_character;
 static int nw_character_choice;
 static char *nw_character_choice_path;
-static bool nw_character_menu;
-static unsigned nw_character_hover;
-static unsigned nw_character_menu_grace;
+static bool nw_switch_consumed;
+struct nuanimdata_s *nw_coco_loading_fall;
 
 void nw_character_select_load_choice(const char *root)
 {
@@ -82,8 +82,8 @@ void nw_character_select_restore(void)
         nw_overridden_level->character = nw_original_character;
         nw_overridden_level = NULL;
     }
-    nw_character_menu = false;
-    nw_character_menu_grace = 0;
+    nw_switch_consumed = false;
+    nw_coco_loading_fall = NULL;
     SDL_SetAtomicInt(&nw_character_status, 0);
 }
 
@@ -110,12 +110,24 @@ static void nw_character_set_level(int character)
     LDATA->character = (short)character;
 }
 
+static void nw_load_coco_loading_fall(void)
+{
+    if (!nw_character_loaded(1)) return;
+    void *archive = NuDatOpen("chars.dat", NULL, NULL);
+    if (!archive) return;
+    NuDatSet(archive);
+    nw_coco_loading_fall = InstAnimDataLoad("chars\\a\\coco\\b\\falllong.ani");
+    NuDatSet(NULL);
+    NuDatClose(archive);
+}
+
 void nw_character_select_load_models(void)
 {
     nw_character_select_restore();
     if (!nw_character_supported_level() || !LDATA->clist ||
         (Level != NW_CHARACTER_HUB && nw_character_choice == NW_CHARACTER_DEFAULT)) {
         LoadCharacterModels__retail();
+        nw_load_coco_loading_fall();
         return;
     }
 
@@ -148,6 +160,7 @@ void nw_character_select_load_models(void)
     LDATA->clist = models;
     LoadCharacterModels__retail();
     LDATA->clist = original_list;
+    nw_load_coco_loading_fall();
 
     if (nw_character_loaded(1)) {
         struct CharacterModel *coco = &CModel[CRemap[1]];
@@ -189,111 +202,113 @@ void nw_character_select_load_models(void)
     }
 }
 
-static void nw_character_swap_hub_npc(int character)
+struct creature_s *nw_character_hub_npc(void)
 {
+    if (Level != NW_CHARACTER_HUB || !nw_character_supported_level() ||
+        !nw_character_loaded(0) || !nw_character_loaded(1)) return NULL;
+
     for (int i = 1; i < 9; ++i) {
         struct creature_s *npc = &Character[i];
         const int ai = npc->i_aitab;
-        if (!npc->used || ai < 0 || ai >= LEVELAICOUNT ||
-            AIType[AITab[ai].ai_type].character != 1 || npc->obj.character == character) {
-            continue;
+        if (npc->used && !npc->obj.dead && ai >= 0 && ai < LEVELAICOUNT &&
+            SDL_strcmp(AIType[AITab[ai].ai_type].name, "coco") == 0) {
+            return npc;
         }
-        ChangeCharacter(npc, character);
-        ResetAnimPacket(&npc->obj.anim, 0x22);
-        npc->idle_mode = 0;
-        npc->idle_action = 0x22;
-        npc->idle_time = 0.0f;
-        npc->idle_wait = IDLEWAIT * 30.0f;
-        npc->idle_repeat = 0;
-        npc->idle_sigh = 0;
     }
+    return NULL;
+}
+
+static void nw_character_swap_hub_npc(struct creature_s *npc, int character)
+{
+    if (!npc || npc->obj.character == character) return;
+    ChangeCharacter(npc, character);
+    ResetAnimPacket(&npc->obj.anim, 0x22);
+    npc->idle_mode = 0;
+    npc->idle_action = 0x22;
+    npc->idle_time = 0.0f;
+    npc->idle_wait = IDLEWAIT * 30.0f;
+    npc->idle_repeat = 0;
+    npc->idle_sigh = 0;
+}
+
+static void nw_character_apply_choice(struct creature_s *creature, int character)
+{
+    if (creature->obj.character != character) ChangeCharacter(creature, character);
+    nw_character_swap_hub_npc(nw_character_hub_npc(), 1 - character);
+    const int choice = character + 1;
+    if (choice != nw_character_choice) {
+        nw_character_save_choice(choice);
+        nw_character_choice = choice;
+    }
+    nw_character_set_level(character);
+    SDL_SetAtomicInt(&nw_character_status, choice);
 }
 
 void nw_character_select_tick(struct creature_s *creature)
 {
-    if (creature != player) {
-        return;
-    }
+    if (creature != player) return;
     const bool available = nw_character_supported_level() && Level == NW_CHARACTER_HUB &&
-                           VEHICLECONTROL == 0 && creature->obj.dead == 0 &&
-                           creature->obj.transporting == 0 && !creature->obj.finished &&
+                           VEHICLECONTROL == 0 && !creature->obj.dead &&
+                           !creature->obj.transporting && !creature->obj.finished &&
                            nw_character_loaded(0) && nw_character_loaded(1);
     SDL_SetAtomicInt(&nw_character_status, available ? creature->obj.character + 1 : 0);
     const int request = SDL_SetAtomicInt(&nw_character_request, 0);
-    if (Level == NW_CHARACTER_HUB && nw_character_supported_level() &&
-        nw_character_loaded(0) && nw_character_loaded(1)) {
-        nw_character_swap_hub_npc((creature->obj.character == 1) ? 0 : 1);
+    nw_character_swap_hub_npc(nw_character_hub_npc(), creature->obj.character == 1 ? 0 : 1);
+    if (available && request >= NW_CHARACTER_CRASH && request <= NW_CHARACTER_COCO) {
+        nw_character_apply_choice(creature, request - 1);
     }
-    if (!available || request < NW_CHARACTER_CRASH || request > NW_CHARACTER_COCO) {
-        return;
-    }
+}
 
-    const int character = request - 1;
-    if (creature->obj.character != character) {
-        ChangeCharacter(creature, character);
-    }
-    nw_character_swap_hub_npc(1 - character);
-    if (request != nw_character_choice) {
-        nw_character_save_choice(request);
-        nw_character_choice = request;
-    }
-    nw_character_set_level(character);
-    SDL_SetAtomicInt(&nw_character_status, request);
+static bool nw_can_switch_at_computer(const struct creature_s *creature)
+{
+    if (!creature || !nw_character_select_status() || Paused || Cursor.menu != -1 ||
+        !creature->obj.ground) return false;
+
+    const struct creature_s *npc = nw_character_hub_npc();
+    if (!npc || npc->obj.invisible || npc->obj.character == creature->obj.character) return false;
+    const float x = creature->obj.pos.x - npc->obj.pos.x;
+    const float y = creature->obj.pos.y - npc->obj.pos.y;
+    const float z = creature->obj.pos.z - npc->obj.pos.z;
+    return x * x + z * z <= 1.0f * 1.0f && SDL_fabsf(y) <= 0.85f;
 }
 
 struct nupad_s *nw_character_select_pad(struct creature_s *creature, struct nupad_s *pad)
 {
-    static struct nupad_s neutral;
-    neutral.valid = 1;
-    neutral.rdata.buttons_hi = neutral.rdata.buttons_lo = 0xff;
-    neutral.rdata.l_alg_x = neutral.rdata.l_alg_y = 0x80;
-    neutral.rdata.r_alg_x = neutral.rdata.r_alg_y = 0x80;
     if (creature != player || !pad) return pad;
-    if (!nw_character_select_status() || Paused) {
-        nw_character_menu = false;
-        nw_character_menu_grace = 0;
-        return pad;
+    if (!(pad->paddata & NW_PAD_SQUARE)) nw_switch_consumed = false;
+    if (!nw_switch_consumed && (pad->paddata_db & NW_PAD_SQUARE) &&
+        nw_can_switch_at_computer(creature)) {
+        nw_character_apply_choice(creature, 1 - creature->obj.character);
+        creature->spin = 1;
+        creature->spin_frame = 0;
+        creature->spin_frames = creature->minfo->SPINFRAMES + creature->minfo->SPINRESETFRAMES;
+        creature->spin_wait = 0;
+        nw_switch_consumed = true;
+        GameSfx(creature->obj.character == 1 ? NW_COCO_SPIN_SOUND : NW_CRASH_SPIN_SOUND, &creature->obj.pos);
     }
-    const unsigned pressed = pad->paddata_db;
-    if (!nw_character_menu && !nw_character_menu_grace && (pressed & NW_PAD_SELECT)) {
-        nw_character_menu = true;
-        nw_character_hover = creature->obj.character == 1;
-        stick_bits = stick_bits_db = 0;
-        return &neutral;
-    }
-    if (nw_character_menu) {
-        const unsigned previous = nw_character_hover;
-        if (pressed & NW_PAD_LEFT) nw_character_hover = 0;
-        if (pressed & NW_PAD_RIGHT) nw_character_hover = 1;
-        if (nw_character_hover != previous) GameSfx(NW_MENU_MOVE_SOUND, NULL);
-        if (pressed & NW_PAD_CROSS) {
-            GameSfx(NW_MENU_CONFIRM_SOUND, NULL);
-            nw_character_select_request(nw_character_hover);
-        }
-        if (pressed & (NW_PAD_CROSS | NW_PAD_CIRCLE)) {
-            nw_character_menu = false;
-            nw_character_menu_grace = 20;
-        }
-        stick_bits = stick_bits_db = 0;
-        return &neutral;
-    }
-    if (nw_character_menu_grace) {
-        if (!(pad->paddata & (NW_PAD_CROSS | NW_PAD_CIRCLE))) --nw_character_menu_grace;
-        stick_bits = stick_bits_db = 0;
-        return &neutral;
-    }
-    return pad;
+    if (!nw_switch_consumed) return pad;
+    static struct nupad_s adjusted;
+    adjusted = *pad;
+    adjusted.paddata &= ~NW_PAD_SQUARE;
+    adjusted.paddata_db &= ~NW_PAD_SQUARE;
+    return &adjusted;
 }
 
 void nw_character_select_draw(void)
 {
-    if (!nw_character_menu || Paused) return;
-    const int flash = (GameTimer.frame / 2) % 12 > 5 ? 3 : 0;
-    Text3D("CHARACTER SELECT", 0, 0.78f, 1, 0.8f, 0.8f, 0.8f, 1, 4);
-    Text3D("CRASH BANDICOOT", -0.5f, -0.7f, 1, 0.6f, 0.6f, 0.6f,
-           nw_character_hover == 0 ? 0x21 : 1, nw_character_hover == 0 ? flash : 2);
-    Text3D("COCO BANDICOOT", 0.5f, -0.7f, 1, 0.6f, 0.6f, 0.6f,
-           nw_character_hover == 1 ? 0x21 : 1, nw_character_hover == 1 ? flash : 2);
+    if (!pCam || !nw_can_switch_at_computer(player)) return;
+    const struct creature_s *npc = nw_character_hub_npc();
+    const struct numtx_s *camera = &pCam->m;
+    const float dx = npc->obj.pos.x - camera->_30;
+    const float dy = npc->obj.pos.y + npc->obj.max.y * npc->obj.SCALE + 0.25f - camera->_31;
+    const float dz = npc->obj.pos.z - camera->_32;
+    const float x = dx * camera->_00 + dy * camera->_01 + dz * camera->_02;
+    const float y = dx * camera->_10 + dy * camera->_11 + dz * camera->_12;
+    const float z = dx * camera->_20 + dy * camera->_21 + dz * camera->_22;
+    if (z < 1.0f) return;
+    const float scale = SDL_min(2.0f, z * 0.23f);
+    Text3D("SPIN TO SWITCH CHARACTER", x / PANEL3DMULX, y / PANEL3DMULY, z,
+           scale, scale, scale, 0, 0);
 }
 
 int nw_character_select_status(void)
