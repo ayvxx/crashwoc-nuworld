@@ -1,5 +1,3 @@
-### Requires NuWorld 0.10.1
-
 ### What is this?
 This is a game mod for NuWorld that adds a character switching option in the hub and makes Coco playable in all stages! I decided to call this project **Coco Unleashed**. This was initially just going to be a small personal project for myself but I'm deciding to release it publicly. It's not perfect but its stable enough to be played through.
 
