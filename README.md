@@ -1,3 +1,16 @@
+### Requires NuWorld 0.10.1
+
+### What is this?
+This is a game mod for NuWorld that adds a character switching option in the hub and makes Coco playable in all stages! I decided to call this project **Coco Unleashed**. This was initially just going to be a small personal project for myself but I'm deciding to release it publicly. It's not perfect but its stable enough to be played through.
+
+**Coco Tweaks:** Coco now has a double jump, crouch and crawl, a slide kick, sneak ability, and fruit bazooka. All abilities and vehicles come with tweaked animations.
+
+**In the Warp Room, walk up to the other character by the computer. When **SPIN TO SWITCH CHARACTER** pops up, press spin button to swap right away.**
+
+**_Run Apply Coco Patch.cmd and select NuWorld.exe for the supported 0.10.1 build.
+The installer replaces only the executable and backs up the previous one._**
+
+
 <p align="center">
   <img src="assets/branding/nuworld-icon.svg" width="144" alt="NuWorld">
 </p>
